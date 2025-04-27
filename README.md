@@ -18,4 +18,4 @@ And Visual Studio Code
 
 
 ### Example of how the mod works and features
-https://github.com/Touqai/ZipSaber/blob/main/ZipSaber%20How%20it%20works%20(2).mp4
+[Video Example](https://github.com/Touqai/ZipSaber/blob/main/ZipSaber%20How%20it%20works%20(2).mp4)
