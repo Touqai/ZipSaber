@@ -9,6 +9,8 @@ I will be fully honest this mod was mainly created with ai, I'm not that great a
 BSIPA ^4.2.2
 SongCore ^3.9.0
 
+# Plans For the Mod
+Adding A UI that asks you if you want the .zip file to go into CustomLevels or CustomWipLevels
 
 # What if I want to compile this myself?
 I used .Net SDK 6.0.428
