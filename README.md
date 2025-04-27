@@ -1,6 +1,6 @@
 # Zip Saber
 
-A Mod That allows you to drag and drop .zip/map files into the beat saber window and extract and Import to the CustomWipLevels folder before refreshing song list.
+A Beat Saber Mod That allows you to drag and drop .zip/map files into the beat saber window and extract and import to the CustomWipLevels folder before refreshing song list.
 
 
 I will be fully honest this mod was mainly created with AI, I'm not that great at coding lol so if u wanna make a part to it go for it, but do message me if u can lol
