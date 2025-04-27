@@ -18,4 +18,4 @@ And Visual Studio Code
 
 
 ### Example of how the mod works and features
-https://cdn.discordapp.com/attachments/487476042542612480/1366076634859438203/2025-04-28_01-38-07.mp4?ex=680fa182&is=680e5002&hm=5600ba63166a01d818b42a1d6a3d5058e74eb04418a8be6d8fc60bc8f29cbd4b&
+https://github.com/Touqai/ZipSaber/blob/main/ZipSaber%20How%20it%20works%20(2).mp4
