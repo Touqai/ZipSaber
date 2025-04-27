@@ -18,5 +18,4 @@ And Visual Studio Code
 
 
 ### Example of how the mod works and features
-[Example
-](https://github.com/Touqai/ZipSaber/blob/main/How%20to%20use.gif)
+![How to use](https://github.com/user-attachments/assets/79a7ef39-888c-4237-9a59-4f00df479504)
