@@ -1,32 +1,41 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <!-- !!! IMPORTANT: Replace this path with YOUR Beat Saber installation directory !!! -->
-    <BeatSaberDir>G:\SteamLibrary\steamapps\common\Beat Saber</BeatSaberDir>
+    <!-- !!! Update this path to YOUR 1.39.1 Beat Saber installation !!! -->
+    <BeatSaberDir>C:\Users\slash\BSManager\BSInstances\1.39.1</BeatSaberDir> <!-- Ensure this path is correct -->
 
+    <!-- Target .NET Framework 4.7.2 for BSIPA 4.x -->
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
     <AssemblyName>ZipSaber</AssemblyName>
     <RootNamespace>ZipSaber</RootNamespace>
-    <!-- Version indicating duplicate handling -->
-    <Version>1.4.0-DuplicateHandling</Version>
+    <!-- Version indicating unusual target combination -->
+    <Version>2.0.0-1.39.1</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputPath>bin\$(Configuration)\</OutputPath>
+    <Nullable>disable</Nullable> <!-- Nullable disabled for net472 -->
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'"> <DebugType>portable</DebugType> </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'"> <DebugType>none</DebugType> </PropertyGroup>
 
   <ItemGroup>
-    <!-- Core Beat Saber & BSIPA Libraries -->
-    <!-- References are included, which will cause warnings if DLLs are missing -->
-
+    <!-- Core Beat Saber (1.39.1) & BSIPA (4.3.5) Libraries -->
     <Reference Include="BSIPA">
+      <!-- Assuming IPA.Loader.dll is from your BSIPA 4.3.5 install -->
       <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\IPA.Loader.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
+    <!-- References REMOVED to prevent build warnings -->
+    <!-- Functionality related to these (Logging, Scheduling) is disabled in Plugin.cs -->
+    <!--
+    <Reference Include="BSIPA.Utilities">...</Reference>
+    <Reference Include="IPA.Logging">...</Reference>
+    -->
+
+    <!-- Game Libs from 1.39.1 -->
     <Reference Include="UnityEngine">
       <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.dll</HintPath>
       <Private>False</Private>
@@ -35,20 +44,26 @@
       <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
-
-    <!-- Required for SongCore -->
-     <Reference Include="HMLib">
+    <Reference Include="HMLib">
       <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\HMLib.dll</HintPath>
       <Private>False</Private>
+    </Reference>
+     <Reference Include="Main">
+        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\Main.dll</HintPath>
+        <Private>False</Private>
+    </Reference>
+    <Reference Include="GameplayCore">
+        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\GameplayCore.dll</HintPath>
+        <Private>False</Private>
     </Reference>
 
     <!-- Mod Dependencies -->
     <Reference Include="SongCore">
+       <!-- Ensure this SongCore.dll is compatible with BSIPA 4.x -->
+       <!-- It might crash due to 1.39.1 game API incompatibility -->
       <HintPath>$(BeatSaberDir)\Plugins\SongCore.dll</HintPath>
       <Private>False</Private>
     </Reference>
-
-    <!-- No BSML dependency needed -->
 
     <!-- .NET Framework Assemblies -->
     <Reference Include="System" />
@@ -62,11 +77,9 @@
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Runtime"/>
-
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Make sure you have a manifest.json suitable for this version -->
     <EmbeddedResource Include="manifest.json" />
   </ItemGroup>
 

@@ -3,13 +3,12 @@
   "id": "ZipSaber",
   "name": "ZipSaber",
   "author": "Touqai",
-  "version": "1.4.0-DuplicateHandling", // Match csproj version
+  "version": "2.0.0-1.39.1", // Match csproj version
   "description": "Drag and drop zip map files onto the Beat Saber window to automatically extract them to CustomWipLevels, handling duplicates.",
-  "gameVersion": "1.29.1",
+  "gameVersion": "1.39.1", // Target game version
   "dependsOn": {
-    "BSIPA": "^4.2.2",
-    "SongCore": "^3.9.0"
-    // No BSML dependency
+    "BSIPA": "^4.2.0", // Target BSIPA 4.x
+    "SongCore": "^3.9.0" // Example: Use correct SongCore version for 1.39.1
   },
   "loadBefore": [],
   "loadAfter": [
