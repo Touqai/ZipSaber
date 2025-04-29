@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+		<!-- Change this path if necessary. Make sure it ends with a backslash. -->
+		<BeatSaberDir>G:/SteamLibrary/steamapps/common/Beat Saber</BeatSaberDir>
+  </PropertyGroup>
+</Project>
