@@ -1,0 +1,63 @@
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\bin\Debug\ZipSaber.dll
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\bin\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Debug\ZipSaber.csproj.AssemblyReference.cache
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Debug\ZipSaber.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Debug\ZipSaber.AssemblyInfoInputs.cache
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Debug\ZipSaber.AssemblyInfo.cs
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Debug\ZipSaber.csproj.CoreCompileInputs.cache
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Debug\ZipSaber.dll
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.29.1-UI-Update\obj\Debug\ZipSaber.csproj.AssemblyReference.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.29.1-UI-Update\obj\Debug\ZipSaber.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.29.1-UI-Update\obj\Debug\ZipSaber.AssemblyInfoInputs.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.29.1-UI-Update\obj\Debug\ZipSaber.AssemblyInfo.cs
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.29.1-UI-Update\obj\Debug\ZipSaber.csproj.CoreCompileInputs.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.29.1-UI-Update\obj\Debug\ZipSaber.dll
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.29.1-UI-Update\obj\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.29.1-UI-Update\bin\Debug\ZipSaber.dll
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.29.1-UI-Update\bin\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI-Update - Copy\obj\Debug\ZipSaber.csproj.AssemblyReference.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI-Update - Copy\obj\Debug\ZipSaber.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI-Update - Copy\obj\Debug\ZipSaber.AssemblyInfoInputs.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI-Update - Copy\obj\Debug\ZipSaber.AssemblyInfo.cs
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI-Update - Copy\obj\Debug\ZipSaber.csproj.CoreCompileInputs.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI-Update - Copy\obj\Debug\ZipSaber.dll
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI-Update - Copy\obj\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI-Update - Copy\bin\Debug\ZipSaber.dll
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI-Update - Copy\bin\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate\obj\Debug\ZipSaber.csproj.AssemblyReference.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate\obj\Debug\ZipSaber.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate\obj\Debug\ZipSaber.AssemblyInfoInputs.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate\obj\Debug\ZipSaber.AssemblyInfo.cs
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate\obj\Debug\ZipSaber.csproj.CoreCompileInputs.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate\obj\Debug\ZipSaber.dll
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate\obj\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate\bin\Debug\ZipSaber.dll
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate\bin\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate + Mods UI\obj\Debug\ZipSaber.csproj.AssemblyReference.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate + Mods UI\obj\Debug\ZipSaber.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate + Mods UI\obj\Debug\ZipSaber.AssemblyInfoInputs.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate + Mods UI\obj\Debug\ZipSaber.AssemblyInfo.cs
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate + Mods UI\obj\Debug\ZipSaber.csproj.CoreCompileInputs.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate + Mods UI\obj\Debug\ZipSaber.dll
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate + Mods UI\obj\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate + Mods UI\bin\Debug\ZipSaber.dll
+C:\Users\slash\Documents\VibeCoding\ZipSaber-1.40.8-UI+ModUpdate + Mods UI\bin\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev\obj\Debug\ZipSaber.csproj.AssemblyReference.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev\obj\Debug\ZipSaber.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev\obj\Debug\ZipSaber.AssemblyInfoInputs.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev\obj\Debug\ZipSaber.AssemblyInfo.cs
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev\obj\Debug\ZipSaber.csproj.CoreCompileInputs.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev\obj\Debug\ZipSaber.dll
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev\obj\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev\bin\Debug\ZipSaber.dll
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev\bin\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev 1.42\bin\Debug\ZipSaber.dll
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev 1.42\bin\Debug\ZipSaber.pdb
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev 1.42\obj\Debug\ZipSaber.csproj.AssemblyReference.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev 1.42\obj\Debug\ZipSaber.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev 1.42\obj\Debug\ZipSaber.AssemblyInfoInputs.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev 1.42\obj\Debug\ZipSaber.AssemblyInfo.cs
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev 1.42\obj\Debug\ZipSaber.csproj.CoreCompileInputs.cache
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev 1.42\obj\Debug\ZipSaber.dll
+C:\Users\slash\Documents\VibeCoding\ZipSaber-Dev 1.42\obj\Debug\ZipSaber.pdb
