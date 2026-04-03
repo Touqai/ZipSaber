@@ -3,17 +3,20 @@
   "id": "ZipSaber",
   "name": "ZipSaber",
   "author": "Touqai",
-  "version": "1.4.0-DuplicateHandling", // Match csproj version
-  "description": "Drag and drop zip map files onto the Beat Saber window to automatically extract them to CustomWipLevels, handling duplicates.",
-  "gameVersion": "1.29.1",
+  "version": "2.0.0",
+  "description": "Drag and drop zip maps to CustomWipLevels, handling duplicates. Option to delete imported maps on game close.",
+  "gameVersion": "1.40.8",
   "dependsOn": {
-    "BSIPA": "^4.2.2",
-    "SongCore": "^3.9.0"
-    // No BSML dependency
+    "BSIPA": "^4.3.0",
+    "SongCore": "^3.15.3",
+    "BeatSaberMarkupLanguage": "^1.12.0"
   },
   "loadBefore": [],
   "loadAfter": [
-    "SongCore"
+    "SongCore",
+    "BeatSaberMarkupLanguage"
   ],
-  "features": []
+  "features": [
+      "Settings"
+    ]
 }

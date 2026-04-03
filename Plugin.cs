@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -9,293 +8,417 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using IPA;
-using IPA.Logging; // Using statement included
-using IPA.Utilities.Async; // Using statement included
+using IPA.Config;
+using IPA.Config.Stores;
+using IPA.Logging;
 using SongCore;
 using UnityEngine;
+using BeatSaberMarkupLanguage.Settings;
+using BeatSaberMarkupLanguage.Util;
+using BeatSaberMarkupLanguage.MenuButtons;
+
+#nullable disable
 
 namespace ZipSaber
 {
-    /// <summary>
-    /// Main BSIPA Plugin class for ZipSaber. Handles window hooking, drag-and-drop to CustomWipLevels, and duplicate folder renaming.
-    /// </summary>
     [Plugin(RuntimeOptions.SingleStartInit)]
     public class Plugin
     {
         #region Constants
-        private const string UnityWindowClass = "UnityWndClass";
-        private const string BeatSaberWindowTitle = "Beat Saber";
+        private const string UnityWindowClass         = "UnityWndClass";
+        private const string BeatSaberWindowTitle     = "Beat Saber";
         private const string CustomWipLevelsFolderName = "CustomWipLevels";
-        private const string BeatSaberDataFolderName = "Beat Saber_Data";
+        private const string CustomLevelsFolderName    = "CustomLevels";
+        private const string BeatSaberDataFolderName   = "Beat Saber_Data";
         #endregion
 
-        #region Static Plugin Instance & Logger
         internal static Plugin Instance { get; private set; }
-        internal static IPA.Logging.Logger Log { get; private set; } // Logger included
-        #endregion
+        internal static PluginConfig Config { get; private set; }
+        internal static IPA.Logging.Logger Log { get; private set; }
 
-        #region WinAPI Imports and Constants
-        private const int GWLP_WNDPROC = -4;
-        private const uint WM_DROPFILES = 0x233;
+        private static List<string> _importedWipFoldersThisSession = new List<string>();
+        private static readonly object _folderListLock = new object();
+
+        #region WinAPI
+        private const int  GWLP_WNDPROC  = -4;
+        private const uint WM_DROPFILES  = 0x233;
         internal delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)] private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)] private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
-        [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern void DragAcceptFiles(IntPtr hWnd, bool fAccept);
+        [DllImport("user32.dll",  SetLastError = true, CharSet = CharSet.Auto)] private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+        [DllImport("user32.dll",  SetLastError = true, CharSet = CharSet.Auto)] private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern void DragAcceptFiles(IntPtr hWnd, bool fAccept);
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern uint DragQueryFile(IntPtr hDrop, uint iFile, [Out] StringBuilder lpszFile, uint cch);
         [DllImport("shell32.dll")] private static extern void DragFinish(IntPtr hDrop);
-        [DllImport("user32.dll", CharSet = CharSet.Auto)] private static extern IntPtr DefWindowProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)] private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+        [DllImport("user32.dll",  CharSet = CharSet.Auto)] private static extern IntPtr DefWindowProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll",  SetLastError = true, CharSet = CharSet.Auto)] private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
         #endregion
 
-        #region Hook State Fields
-        private static IntPtr Hwnd = IntPtr.Zero;
+        private static IntPtr          Hwnd           = IntPtr.Zero;
         private static WndProcDelegate wndProcDelegate;
-        private static IntPtr oldWndProc = IntPtr.Zero;
-        private static string CustomWipLevelsPath; // Only WIP path needed
-        private static bool hooksAttempted = false;
-        private static bool hooksActive = false;
-        #endregion
+        private static IntPtr          oldWndProc     = IntPtr.Zero;
+        private static string          CustomWipLevelsPath;
+        private static string          CustomLevelsPath;
+        private static string          PluginsPath;
+        private static bool            hooksAttempted = false;
+        private static bool            hooksActive    = false;
 
-        #region BSIPA Plugin Lifecycle Methods
         [Init]
-        public Plugin(IPA.Logging.Logger logger)
+        public Plugin(IPA.Config.Config conf, IPA.Logging.Logger logger)
         {
             Instance = this;
-            Log = logger;
-            Log?.Info("ZipSaber initializing (Duplicate Handling Enabled).");
+            Log      = logger;
+            Config   = conf.Generated<PluginConfig>();
+            Log.Info("Initializing ZipSaber...");
+            lock (_folderListLock) { _importedWipFoldersThisSession.Clear(); }
+            CleanupPendingDeletes();
+        }
+
+        private void CleanupPendingDeletes()
+        {
+            try
+            {
+                string pluginsDir = System.IO.Path.GetDirectoryName(
+                    System.Reflection.Assembly.GetExecutingAssembly().Location);
+                Log.Info($"[Cleanup] Scanning: {pluginsDir}");
+                var markerFiles = System.IO.Directory.GetFiles(pluginsDir, "*.zs_del");
+                if (markerFiles.Length > 0)
+                    Log.Warn($"[Cleanup] {markerFiles.Length} marker(s) still present.");
+                string batPath = System.IO.Path.Combine(pluginsDir, "zs_cleanup.bat");
+                if (System.IO.File.Exists(batPath))
+                    try { System.IO.File.Delete(batPath); } catch { }
+            }
+            catch (Exception ex) { Log.Warn($"[Cleanup] Scan failed: {ex.Message}"); }
         }
 
         [OnEnable]
         public void OnEnable()
         {
-            Log?.Info("ZipSaber OnEnable called.");
+            Log.Info("OnEnable called.");
             CalculatePaths();
+
+            // Guard against duplicate subscription across OnEnable calls
+            MainMenuAwaiter.MainMenuInitializing -= RegisterBSMLSettings;
+            MainMenuAwaiter.MainMenuInitializing += RegisterBSMLSettings;
 
             if (!hooksAttempted && !hooksActive)
             {
-                Log?.Debug("Scheduling delayed hook setup.");
+                Log.Info("Scheduling delayed hook setup.");
                 hooksAttempted = true;
                 Task.Run(async () => { await Task.Delay(3000); AttemptFindAndHookWindow(); });
             }
-            else { Log?.Warn($"Hook setup already attempted/active (Attempted={hooksAttempted}, Active={hooksActive}). Skipping OnEnable setup."); }
         }
 
         [OnDisable]
         public void OnDisable()
         {
-            Log?.Info("ZipSaber OnDisable called.");
+            Log.Info("OnDisable called.");
             CleanupWindowHook();
             hooksAttempted = false;
+            MainMenuAwaiter.MainMenuInitializing -= RegisterBSMLSettings;
+
+            bool shouldDelete = Config?.DeleteOnClose ?? false;
+            if (shouldDelete)
+            {
+                List<string> foldersToDelete;
+                lock (_folderListLock)
+                {
+                    foldersToDelete = new List<string>(_importedWipFoldersThisSession);
+                    _importedWipFoldersThisSession.Clear();
+                }
+                int deleteCount = 0;
+                foreach (string fp in foldersToDelete) { if (TryDeleteDirectory(fp)) deleteCount++; }
+                Log.Info($"Deleted {deleteCount} WIP folder(s).");
+            }
+            else { lock (_folderListLock) { _importedWipFoldersThisSession.Clear(); } }
+
+            ModManagerViewController.ExecutePendingDeletions();
+            ModManagerViewController.ExecutePendingInstalls(BeatModsBrowserViewController.DownloadUrlsByName);
+            LaunchPostExitCleanup();
         }
-        #endregion
+
+        public void LaunchPostExitCleanupPublic() => LaunchPostExitCleanup();
+
+        private void LaunchPostExitCleanup()
+        {
+            try
+            {
+                string pluginsDir = System.IO.Path.GetDirectoryName(
+                    System.Reflection.Assembly.GetExecutingAssembly().Location);
+                var markerFiles = System.IO.Directory.GetFiles(pluginsDir, "*.zs_del");
+                if (markerFiles.Length == 0) return;
+
+                int pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+                string batPath = System.IO.Path.Combine(pluginsDir, "zs_cleanup.bat");
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("@echo off");
+                sb.AppendLine(":wait");
+                sb.AppendLine($"tasklist /FI \"PID eq {pid}\" 2>nul | find \"{pid}\" >nul");
+                sb.AppendLine($"if not errorlevel 1 (timeout /t 2 /nobreak >nul & goto wait)");
+                foreach (string marker in markerFiles)
+                {
+                    string target = marker.Substring(0, marker.Length - ".zs_del".Length);
+                    sb.AppendLine($"del /f /q \"{target}\"");
+                    sb.AppendLine($"del /f /q \"{marker}\"");
+                }
+                sb.AppendLine($"del /f /q \"{batPath}\"");
+                System.IO.File.WriteAllText(batPath, sb.ToString());
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "cmd.exe", Arguments = $"/C \"{batPath}\"",
+                    UseShellExecute = false, CreateNoWindow = true
+                });
+                Log.Info($"[Cleanup] Post-exit cleanup launched for {markerFiles.Length} file(s).");
+            }
+            catch (Exception ex) { Log.Warn($"[Cleanup] LaunchPostExitCleanup failed: {ex.Message}"); }
+        }
+
+        // Fires on EVERY MainMenuInitializing (initial load + every scene reload after settings Ok).
+        // Do NOT unsubscribe inside here — must keep firing on every reload.
+        private void RegisterBSMLSettings()
+        {
+            try
+            {
+                // Use the persistent singleton — do NOT reset/recreate it.
+                // The VC reads fresh values from Plugin.Config in DidActivate.
+                BSMLSettings.Instance?.AddSettingsMenu(
+                    "ZipSaber", "ZipSaber.settings.bsml", SettingsViewController.instance);
+
+                // MenuButtons clears on every scene change so always re-register
+                MenuButtons.Instance?.RegisterButton(new MenuButton(
+                    "ZipSaber", "Manage & install mods", ModManagerFlowCoordinator.Present));
+
+                Log.Info("BSML UI registered.");
+            }
+            catch (Exception ex) { Log.Error($"Error registering BSML UI: {ex.Message}\n{ex}"); }
+        }
 
         #region Path Calculation
         private void CalculatePaths()
         {
-            if (!string.IsNullOrEmpty(CustomWipLevelsPath)) return;
             try
             {
-                string gameDataPath = Application.dataPath;
-                if (string.IsNullOrEmpty(gameDataPath)) { Log?.Error("[Pathing] Application.dataPath is null or empty!"); CustomWipLevelsPath = null; return; }
-                DirectoryInfo gameDataDir = new DirectoryInfo(gameDataPath);
-                DirectoryInfo gameDirInfo = gameDataDir.Parent;
-                if (gameDirInfo == null) { Log?.Error("[Pathing] Could not get parent directory!"); CustomWipLevelsPath = null; return; }
-                string gameDir = gameDirInfo.FullName;
-
-                CustomWipLevelsPath = Path.Combine(gameDir, BeatSaberDataFolderName, CustomWipLevelsFolderName);
-                Log?.Info($"[Pathing] Target CustomWipLevels path: {CustomWipLevelsPath}");
-                EnsureDirectoryExists(CustomWipLevelsPath, "[Pathing]");
+                string gdp = Application.dataPath;
+                if (string.IsNullOrEmpty(gdp)) { Log.Error("App dataPath null!"); return; }
+                DirectoryInfo dataDir    = new DirectoryInfo(gdp);
+                DirectoryInfo installDir = dataDir.Parent;
+                if (installDir == null) { Log.Error("Parent dir null!"); return; }
+                if (string.IsNullOrEmpty(CustomWipLevelsPath))
+                {
+                    CustomWipLevelsPath = Path.Combine(installDir.FullName, BeatSaberDataFolderName, CustomWipLevelsFolderName);
+                    Log.Info($"WIP Path: {CustomWipLevelsPath}");
+                    EnsureDirectoryExists(CustomWipLevelsPath, "WIPPath");
+                }
+                if (string.IsNullOrEmpty(CustomLevelsPath))
+                {
+                    CustomLevelsPath = Path.Combine(installDir.FullName, BeatSaberDataFolderName, CustomLevelsFolderName);
+                    Log.Info($"Custom Path: {CustomLevelsPath}");
+                    EnsureDirectoryExists(CustomLevelsPath, "CustomPath");
+                }
+                if (string.IsNullOrEmpty(PluginsPath))
+                {
+                    PluginsPath = Path.Combine(installDir.FullName, "Plugins");
+                    Log.Info($"Plugins Path: {PluginsPath}");
+                    EnsureDirectoryExists(PluginsPath, "PluginsPath");
+                }
             }
-            catch (Exception e) { Log?.Error($"[Pathing] Failed: {e.Message}"); Log?.Debug(e); CustomWipLevelsPath = null; }
+            catch (Exception e) { Log.Error($"PathFail: {e.Message}\n{e}"); }
         }
 
-        private bool EnsureDirectoryExists(string path, string logContext)
+        private bool EnsureDirectoryExists(string p, string ctx)
         {
-             if (string.IsNullOrEmpty(path)) return false;
-             if (!Directory.Exists(path)) { Log?.Warn($"{logContext} Directory not found. Creating: {path}"); try { Directory.CreateDirectory(path); Log?.Info($"{logContext} Created: {Path.GetFileName(path)}"); return true; } catch (Exception ex) { Log?.Error($"{logContext} Failed create '{Path.GetFileName(path)}': {ex.Message}"); return false; } }
-             return true;
+            if (string.IsNullOrEmpty(p)) { Log.Warn($"{ctx}: null path"); return false; }
+            if (!Directory.Exists(p)) { try { Directory.CreateDirectory(p); } catch (Exception ex) { Log.Error($"{ctx}: CreateFail: {ex.Message}"); return false; } }
+            return true;
         }
+
+        internal static string GetPluginsPath() => PluginsPath;
         #endregion
 
-        #region Window Hooking Logic
+        #region Window Hook
         private void AttemptFindAndHookWindow()
         {
-            Log?.Info("[Hooking] Finding Beat Saber window...");
-            IntPtr foundHwnd = FindWindow(UnityWindowClass, null);
-            if (foundHwnd == IntPtr.Zero) foundHwnd = FindWindow(null, BeatSaberWindowTitle);
-            if (foundHwnd == IntPtr.Zero) { try { foundHwnd = Process.GetCurrentProcess().MainWindowHandle; } catch { /* Ignore */ } }
-
-            if (foundHwnd != IntPtr.Zero) { Log?.Info($"[Hooking] Found window {foundHwnd}. Setting up hook."); SetupWindowHook(foundHwnd); }
-            else { Log?.Error("[Hooking] Failed to find window handle."); }
+            Log.Debug("[Hooking] Finding window...");
+            IntPtr fHwnd = FindWindow(UnityWindowClass, null);
+            if (fHwnd == IntPtr.Zero) fHwnd = FindWindow(null, BeatSaberWindowTitle);
+            if (fHwnd == IntPtr.Zero) { try { fHwnd = Process.GetCurrentProcess().MainWindowHandle; } catch { Log.Warn("[Hooking] Failed get process handle."); } }
+            if (fHwnd != IntPtr.Zero) { Log.Info($"[Hooking] Found {fHwnd}. Setting hook."); SetupWindowHook(fHwnd); }
+            else { Log.Error("[Hooking] Failed find window."); hooksAttempted = false; }
         }
 
-        private void SetupWindowHook(IntPtr windowHandle)
+        private void SetupWindowHook(IntPtr wh)
         {
-            if (hooksActive || Hwnd != IntPtr.Zero) { Log?.Warn($"[Hooking] Already active/hooked. Skipping."); return; }
+            if (hooksActive || Hwnd != IntPtr.Zero) { Log.Warn("Hook already active."); return; }
             try
             {
-                Hwnd = windowHandle; Log?.Info($"[Hooking] Setting hook for HWND: {Hwnd}"); CalculatePaths();
-                if (string.IsNullOrEmpty(CustomWipLevelsPath)) { Log?.Error("[Hooking] Aborting: CustomWipLevelsPath not set."); Hwnd = IntPtr.Zero; return; }
-                wndProcDelegate = new WndProcDelegate(StaticWndProc); IntPtr wndProcPtr = Marshal.GetFunctionPointerForDelegate(wndProcDelegate); oldWndProc = SetWindowLongPtr(Hwnd, GWLP_WNDPROC, wndProcPtr); int err = Marshal.GetLastWin32Error();
-                if (oldWndProc == IntPtr.Zero && err != 0) { Log?.Error($"[Hooking] SetWindowLongPtr failed: {err} ({new Win32Exception(err).Message})"); CleanupWindowHook(); return; }
-                DragAcceptFiles(Hwnd, true); err = Marshal.GetLastWin32Error();
-                if (err != 0) { Log?.Error($"[Hooking] DragAcceptFiles(true) failed: {err} ({new Win32Exception(err).Message})"); CleanupWindowHook(); return; }
-                Log?.Info("[Hooking] Hook setup successful."); hooksActive = true;
-            } catch (Exception ex) { Log?.Error($"[Hooking] Critical setup error: {ex.Message}"); Log?.Debug(ex); CleanupWindowHook(); }
+                Hwnd = wh; CalculatePaths();
+                if (string.IsNullOrEmpty(CustomWipLevelsPath)) { Log.Error("Hook Abort: WIP path null."); Hwnd = IntPtr.Zero; return; }
+                wndProcDelegate = StaticWndProc;
+                IntPtr ptr = Marshal.GetFunctionPointerForDelegate(wndProcDelegate);
+                oldWndProc = SetWindowLongPtr(Hwnd, GWLP_WNDPROC, ptr);
+                int err = Marshal.GetLastWin32Error();
+                if (oldWndProc == IntPtr.Zero && err != 0) { Log.Error($"SetFail: {err}"); CleanupWindowHook(); return; }
+                DragAcceptFiles(Hwnd, true);
+                Log.Info("Hook OK"); hooksActive = true;
+            }
+            catch (Exception ex) { Log.Error($"Hook Setup Err: {ex.Message}\n{ex}"); CleanupWindowHook(); }
         }
 
         private void CleanupWindowHook()
         {
-            Log?.Info("[Hooking] Cleaning up hooks..."); IntPtr currentHwnd = Hwnd; IntPtr currentOldWndProc = oldWndProc;
-            if (currentHwnd != IntPtr.Zero) { try { DragAcceptFiles(currentHwnd, false); } catch { } if (currentOldWndProc != IntPtr.Zero) { try { SetWindowLongPtr(currentHwnd, GWLP_WNDPROC, currentOldWndProc); } catch { } } }
-            wndProcDelegate = null; oldWndProc = IntPtr.Zero; Hwnd = IntPtr.Zero; hooksActive = false; Log?.Info("[Hooking] Cleanup finished.");
+            Log.Debug("Hook Cleanup...");
+            IntPtr cHwnd = Hwnd, cOld = oldWndProc;
+            if (cHwnd != IntPtr.Zero)
+            {
+                try { DragAcceptFiles(cHwnd, false); } catch { }
+                if (cOld != IntPtr.Zero) { try { SetWindowLongPtr(cHwnd, GWLP_WNDPROC, cOld); } catch (Exception ex) { Log.Warn($"Failed restore hook: {ex.Message}"); } }
+            }
+            wndProcDelegate = null; oldWndProc = IntPtr.Zero; Hwnd = IntPtr.Zero; hooksActive = false;
+            Log.Info("Hook Cleanup OK");
         }
 
-        internal static IntPtr StaticWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+        internal static IntPtr StaticWndProc(IntPtr h, uint m, IntPtr w, IntPtr l)
         {
-            if (msg == WM_DROPFILES) { Log?.Info($"[WndProc] WM_DROPFILES received. Processing async."); Task.Run(() => StaticHandleDroppedFiles(wParam)); return IntPtr.Zero; }
-            IntPtr currentOldWndProc = oldWndProc; if (currentOldWndProc != IntPtr.Zero) { try { return CallWindowProc(currentOldWndProc, hWnd, msg, wParam, lParam); } catch (Exception ex) { Log?.Error($"[WndProc] Error calling original: {ex.Message}. Using DefWindowProc."); return DefWindowProc(hWnd, msg, wParam, lParam); } }
-            Log?.Warn($"[WndProc] Original WndProc Zero. Using DefWindowProc."); return DefWindowProc(hWnd, msg, wParam, lParam);
+            if (m == WM_DROPFILES) { Log.Debug("WM_DROPFILES received"); Task.Run(() => StaticHandleDroppedFiles(w)); return IntPtr.Zero; }
+            IntPtr currentOld = oldWndProc;
+            if (currentOld != IntPtr.Zero) { try { return CallWindowProc(currentOld, h, m, w, l); } catch (Exception ex) { Log.Error($"CallOrigErr: {ex.Message}"); return DefWindowProc(h, m, w, l); } }
+            return DefWindowProc(h, m, w, l);
         }
         #endregion
 
-        #region Dropped File Handling
+        #region Drop Handling
         private static void StaticHandleDroppedFiles(IntPtr hDrop)
         {
-            List<string> filesToProcess = new List<string>();
+            List<string> files = new List<string>();
             try
             {
-                uint fileCount = DragQueryFile(hDrop, 0xFFFFFFFF, null, 0); Log?.Info($"[Drop Handling] {fileCount} files dropped.");
-                for (uint i = 0; i < fileCount; i++) { uint len = DragQueryFile(hDrop, i, null, 0); if (len > 0) { StringBuilder sb = new StringBuilder((int)len + 1); if (DragQueryFile(hDrop, i, sb, (uint)sb.Capacity) > 0) filesToProcess.Add(sb.ToString()); } }
-            } catch (Exception ex) { Log?.Error($"[Drop Handling] Error querying files: {ex.Message}"); Log?.Debug(ex); }
-            finally { try { DragFinish(hDrop); Log?.Debug("[Drop Handling] DragFinish called."); } catch { } }
+                uint count = DragQueryFile(hDrop, 0xFFFFFFFF, null, 0);
+                Log.Info($"Drop: {count} items");
+                for (uint i = 0; i < count; i++)
+                {
+                    uint len = DragQueryFile(hDrop, i, null, 0);
+                    if (len > 0) { var sb = new StringBuilder((int)len + 1); if (DragQueryFile(hDrop, i, sb, (uint)sb.Capacity) > 0) files.Add(sb.ToString()); }
+                }
+            }
+            catch (Exception ex) { Log.Error($"DropQueryErr: {ex.Message}\n{ex}"); }
+            finally { try { DragFinish(hDrop); } catch { } }
 
-            if (filesToProcess.Any()) { ProcessDroppedFilesBatch(filesToProcess); } // Already background
-            else { Log?.Info("[Drop Handling] No files retrieved."); }
+            if (!files.Any()) return;
+            if (Instance == null) { Log.Error("Instance null."); return; }
+
+            var zips    = files.Where(p => Path.GetExtension(p).Equals(".zip", StringComparison.OrdinalIgnoreCase)).ToList();
+            var dlls    = files.Where(p => Path.GetExtension(p).Equals(".dll", StringComparison.OrdinalIgnoreCase)).ToList();
+            int skipped = files.Count - zips.Count - dlls.Count;
+            if (skipped > 0) Log.Info($"Drop: Skipped {skipped} unrecognised file(s).");
+
+            if (dlls.Any()) Instance.HandleDroppedDlls(dlls);
+            if (!zips.Any()) return;
+            if (Config == null || !Config.ShowDestinationPrompt)
+            { Instance.ProcessDroppedFilesBatchToTarget(zips, wip: true); return; }
+            DestinationModal.Instance.EnqueueBatch(zips);
         }
 
-        private static void ProcessDroppedFilesBatch(List<string> filePaths)
+        internal void ProcessDroppedFilesBatchToTarget(List<string> paths, bool wip)
         {
-             bool anyProcessedSuccessfully = false; int successCount = 0; int failCount = 0; int skipCount = 0;
-             Log?.Info($"[File Processing] Starting batch for {filePaths.Count} files.");
-             foreach (string filePath in filePaths) { try { if (Path.GetExtension(filePath).Equals(".zip", StringComparison.OrdinalIgnoreCase)) { Log?.Info($"[File Processing] Processing ZIP: {Path.GetFileName(filePath)}"); if (Plugin.Instance?.ProcessMapZip(filePath) == true) { successCount++; anyProcessedSuccessfully = true; } else { failCount++; } } else { skipCount++; Log?.Warn($"[File Processing] Skipping non-zip: {Path.GetFileName(filePath)}"); } } catch (Exception ex) { Log?.Error($"[File Processing] Batch error for '{Path.GetFileName(filePath)}': {ex.Message}"); Log?.Debug(ex); failCount++; } }
-             Log?.Info($"[File Processing] Batch finished. Succeeded={successCount}, Failed/Skipped-Zip={failCount}, Skipped-NonZip={skipCount}.");
-             if (anyProcessedSuccessfully) { Plugin.Instance?.RequestSongRefresh(); }
+            string targetBase = wip ? CustomWipLevelsPath : CustomLevelsPath;
+            string targetName = wip ? "CustomWipLevels" : "CustomLevels";
+            if (string.IsNullOrEmpty(targetBase)) { Log.Error($"Target path null for {targetName}."); return; }
+            bool anyOK = false; int ok = 0, fail = 0;
+            foreach (string p in paths)
+            {
+                try { if (ProcessMapZip(p, targetBase, wip)) { ok++; anyOK = true; } else fail++; }
+                catch (Exception ex) { Log.Error($"Batch Err {Path.GetFileName(p)}: {ex.Message}"); fail++; }
+            }
+            Log.Info($"Batch done. OK:{ok} Fail:{fail}");
+            if (anyOK) RequestSongRefresh();
         }
         #endregion
 
-        #region Map Processing Logic (with Duplicate Handling)
-        /// <summary>
-        /// Extracts, validates, and moves a single map zip ONLY to CustomWipLevels, handling duplicates by appending numbers.
-        /// </summary>
-        /// <param name="zipFilePath">The full path to the zip file.</param>
-        /// <returns>True if the zip was successfully extracted and validated, false otherwise.</returns>
-        internal bool ProcessMapZip(string zipFilePath)
+        #region Mod DLL Installation
+        internal void HandleDroppedDlls(List<string> dllPaths)
         {
-            string mapNameForLog = Path.GetFileNameWithoutExtension(zipFilePath);
-            string targetBasePath = CustomWipLevelsPath; // Target is always WIP levels
-            string finalExtractionDir = null; // Initialize to null
-            bool extractionOk = false;
-            bool validationOk = false;
-
-            Log?.Debug($"[ProcessMapZip - {mapNameForLog}] Starting processing for target: CustomWipLevels");
-
-            try
+            if (string.IsNullOrEmpty(PluginsPath)) { Log.Error("[ModInstall] Plugins path unknown."); return; }
+            var installed = new List<string>(); int invalid = 0;
+            foreach (string dll in dllPaths)
             {
-                // Ensure WIP path exists
-                if (string.IsNullOrEmpty(targetBasePath) || !EnsureDirectoryExists(targetBasePath, $"[ProcessMapZip - {mapNameForLog}]"))
-                {
-                    Log?.Error($"[ProcessMapZip - {mapNameForLog}] Target path 'CustomWipLevels' is invalid or could not be created.");
-                    return false;
-                }
-
-                // --- Duplicate Check and Renaming Logic ---
-                string sanitizedBaseName = SanitizeFolderName(mapNameForLog);
-                string currentExtractionDir = Path.Combine(targetBasePath, sanitizedBaseName);
-
-                if (Directory.Exists(currentExtractionDir))
-                {
-                    Log?.Warn($"[ProcessMapZip - {mapNameForLog}] Folder '{sanitizedBaseName}' already exists. Finding unique name...");
-                    int copyNumber = 1;
-                    string potentialName;
-                    do
-                    {
-                        potentialName = $"{sanitizedBaseName}_{copyNumber}"; // Append _1, _2, etc.
-                        currentExtractionDir = Path.Combine(targetBasePath, potentialName);
-                        Log?.Debug($"[ProcessMapZip - {mapNameForLog}] Checking potential name: {potentialName}");
-                        copyNumber++;
-                        if (copyNumber > 100) // Safety break to prevent potential infinite loop
-                        {
-                             Log?.Error($"[ProcessMapZip - {mapNameForLog}] Could not find unique name after 100 attempts. Aborting.");
-                             return false;
-                        }
-                    } while (Directory.Exists(currentExtractionDir));
-                    Log?.Info($"[ProcessMapZip - {mapNameForLog}] Using unique name: {potentialName}");
-                }
-                finalExtractionDir = currentExtractionDir; // Set the final path (original or numbered)
-                // --- End Duplicate Check ---
-
-
-                Log?.Info($"[ProcessMapZip - {mapNameForLog}] Final target directory: {finalExtractionDir}");
-                Log?.Debug($"[ProcessMapZip - {mapNameForLog}] Attempting extraction...");
+                string fileName = Path.GetFileName(dll);
+                if (!ModValidator.IsBsipaPlugin(dll, out string modId, out string modVersion))
+                { Log.Warn($"[ModInstall] '{fileName}' rejected."); invalid++; continue; }
                 try
                 {
-                    Directory.CreateDirectory(finalExtractionDir);
-                    ZipFile.ExtractToDirectory(zipFilePath, finalExtractionDir);
-                    Log?.Info($"[ProcessMapZip - {mapNameForLog}] Extracted successfully.");
-                    extractionOk = true;
+                    File.Copy(dll, Path.Combine(PluginsPath, fileName), overwrite: true);
+                    string label = modVersion != "?" ? $"{modId} v{modVersion}" : modId;
+                    installed.Add(label); Log.Info($"[ModInstall] Installed '{label}'");
                 }
-                catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is UnauthorizedAccessException)
-                { Log?.Error($"[ProcessMapZip - {mapNameForLog}] Extraction failed: {ex.GetType().Name} - {ex.Message}"); }
-                catch (Exception ex)
-                { Log?.Error($"[ProcessMapZip - {mapNameForLog}] Unexpected extraction error: {ex.GetType().Name} - {ex.Message}"); Log?.Debug(ex); }
-
-                if (extractionOk)
-                {
-                     Log?.Debug($"[ProcessMapZip - {mapNameForLog}] Validating extracted contents...");
-                    validationOk = IsValidMapFolder(finalExtractionDir);
-                     if (!validationOk) { Log?.Warn($"[ProcessMapZip - {mapNameForLog}] Validation failed."); }
-                     else { Log?.Info($"[ProcessMapZip - {mapNameForLog}] Validation passed."); }
-                }
+                catch (Exception ex) { Log.Error($"[ModInstall] Copy failed '{fileName}': {ex.Message}"); }
             }
-            catch (Exception ex) { Log?.Error($"[ProcessMapZip - {mapNameForLog}] Outer processing error: {ex.Message}"); Log?.Debug(ex); }
-            finally
+            if (invalid > 0) Log.Warn($"[ModInstall] {invalid} rejected.");
+            if (installed.Any()) ModInstallModal.Instance.ShowForMods(installed);
+        }
+        #endregion
+
+        #region Map Processing
+        internal bool ProcessMapZip(string zip, string targetBase, bool trackForDelete)
+        {
+            string mapName = Path.GetFileNameWithoutExtension(zip);
+            string finalDir = null; bool extOK = false, valOK = false;
+            try
             {
-                // Cleanup if extraction happened but validation failed
-                if (finalExtractionDir != null && extractionOk && !validationOk && Directory.Exists(finalExtractionDir))
+                if (!EnsureDirectoryExists(targetBase, "MapProc")) return false;
+                string sanName = SanitizeFolderName(mapName);
+                string curDir  = Path.Combine(targetBase, sanName);
+                if (Directory.Exists(curDir))
                 {
-                     Log?.Warn($"[ProcessMapZip - {mapNameForLog}] Validation failed. Cleaning up target directory: {Path.GetFileName(finalExtractionDir)}");
-                     TryDeleteDirectory(finalExtractionDir);
+                    int num = 1; string potName;
+                    do { potName = $"{sanName}_{num++}"; curDir = Path.Combine(targetBase, potName); if (num > 100) return false; }
+                    while (Directory.Exists(curDir));
                 }
-                 // No need to clean up if extraction failed, as TryDeleteDirectory isn't robust against partial creation inside the loop
+                finalDir = curDir;
+                try { Directory.CreateDirectory(finalDir); ZipFile.ExtractToDirectory(zip, finalDir); extOK = true; }
+                catch (Exception ex) { Log.Error($"ExtractFail: {ex.Message}"); }
+                if (extOK)
+                {
+                    valOK = IsValidMapFolder(finalDir);
+                    if (valOK && trackForDelete)
+                        lock (_folderListLock) { _importedWipFoldersThisSession.Add(finalDir); }
+                }
             }
-            return extractionOk && validationOk; // Return true only if both steps succeeded
+            catch (Exception ex) { Log.Error($"OuterErr: {ex.Message}"); }
+            finally { if (finalDir != null && Directory.Exists(finalDir) && (!extOK || !valOK)) TryDeleteDirectory(finalDir); }
+            return extOK && valOK;
         }
 
-        /// <summary>Checks if a folder contains essential Beat Saber map files.</summary>
-        private bool IsValidMapFolder(string folderPath) // (Unchanged)
+        private bool IsValidMapFolder(string p)
         {
-            string context = $"[Validation - {Path.GetFileName(folderPath)}]"; if (!Directory.Exists(folderPath)) { Log?.Warn($"{context} Folder not found: {folderPath}"); return false; } try { bool hasInfo = Directory.EnumerateFiles(folderPath, "info.dat", SearchOption.TopDirectoryOnly).Any(f => Path.GetFileName(f).Equals("info.dat", StringComparison.OrdinalIgnoreCase)); bool hasAudio = Directory.EnumerateFiles(folderPath, "*.*", SearchOption.TopDirectoryOnly).Any(f => { var ext = Path.GetExtension(f); return ext.Equals(".egg", StringComparison.OrdinalIgnoreCase) || ext.Equals(".ogg", StringComparison.OrdinalIgnoreCase) || ext.Equals(".wav", StringComparison.OrdinalIgnoreCase); }); bool hasDifficulty = Directory.EnumerateFiles(folderPath, "*.dat", SearchOption.TopDirectoryOnly).Any(f => !Path.GetFileName(f).Equals("info.dat", StringComparison.OrdinalIgnoreCase)); Log?.Debug($"{context} Checks: Info={hasInfo}, Audio={hasAudio}, Difficulty={hasDifficulty}"); if (!hasInfo) Log?.Warn($"{context} Missing info.dat"); if (!hasAudio) Log?.Warn($"{context} Missing audio"); if (!hasDifficulty) Log?.Warn($"{context} Missing difficulty"); return hasInfo && hasAudio && hasDifficulty; } catch (Exception ex) { Log?.Error($"{context} Validation error: {ex.Message}"); Log?.Debug(ex); return false; }
+            if (!Directory.Exists(p)) return false;
+            try
+            {
+                bool hasInfo  = Directory.EnumerateFiles(p, "info.dat", SearchOption.TopDirectoryOnly).Any(f => Path.GetFileName(f).Equals("info.dat", StringComparison.OrdinalIgnoreCase));
+                bool hasAudio = Directory.EnumerateFiles(p, "*.*", SearchOption.TopDirectoryOnly).Any(f => { var e = Path.GetExtension(f); return e.Equals(".egg", StringComparison.OrdinalIgnoreCase) || e.Equals(".ogg", StringComparison.OrdinalIgnoreCase) || e.Equals(".wav", StringComparison.OrdinalIgnoreCase); });
+                bool hasDiff  = Directory.EnumerateFiles(p, "*.dat", SearchOption.TopDirectoryOnly).Any(f => !Path.GetFileName(f).Equals("info.dat", StringComparison.OrdinalIgnoreCase));
+                return hasInfo && hasAudio && hasDiff;
+            }
+            catch (Exception ex) { Log.Error($"ValidationErr: {ex.Message}"); return false; }
         }
 
-        /// <summary>Sanitizes a string for use as a folder name.</summary>
-        private string SanitizeFolderName(string name) // (Unchanged)
+        private string SanitizeFolderName(string n)
         {
-            char[] invalidChars = Path.GetInvalidFileNameChars(); string sanitized = string.Join("_", name.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries)).TrimEnd('.', ' '); if (string.IsNullOrWhiteSpace(sanitized)) { string fallbackName = "ImportedMap_" + Guid.NewGuid().ToString("N").Substring(0, 8); Log?.Warn($"[Sanitize] Name '{name}' empty post-sanitize. Fallback: {fallbackName}"); return fallbackName; } if (sanitized != name) { Log?.Debug($"[Sanitize] '{name}' -> '{sanitized}'"); } return sanitized;
+            char[] inv = Path.GetInvalidFileNameChars();
+            string san = string.Join("_", n.Split(inv, StringSplitOptions.RemoveEmptyEntries)).TrimEnd('.', ' ');
+            return string.IsNullOrWhiteSpace(san) ? "ImportedMap_" + Guid.NewGuid().ToString("N").Substring(0, 8) : san;
         }
         #endregion
 
         #region Utilities
-        /// <summary>Requests SongCore song refresh. Attempts use of main thread scheduler.</summary>
-        internal void RequestSongRefresh() // (Unchanged from previous attempt)
+        internal void RequestSongRefresh()
         {
-            try { if (Loader.Instance != null) { Log?.Info("[Refresh] Requesting SongCore refresh."); try { UnityMainThreadTaskScheduler.Factory.StartNew(() => { try { Log?.Debug("[Refresh] Executing RefreshSongs(false) on main thread."); Loader.Instance.RefreshSongs(false); Log?.Info("[Refresh] RefreshSongs executed via scheduler."); } catch (Exception ex) { Log?.Error($"[Refresh] Error calling RefreshSongs via scheduler: {ex.Message}"); Log?.Debug(ex); } }); } catch (TypeLoadException tlEx) { Log?.Error($"[Refresh] Could not use Scheduler (BSIPA.Utilities missing?): {tlEx.Message}. Attempting direct call..."); try { Log?.Warn("[Refresh] WARNING: Calling RefreshSongs directly."); Loader.Instance.RefreshSongs(false); } catch (Exception ex) { Log?.Error($"[Refresh] Error calling RefreshSongs directly: {ex.Message}"); Log?.Debug(ex); } } catch (Exception schedEx) { Log?.Error($"[Refresh] Error using Scheduler: {schedEx.Message}"); Log?.Debug(schedEx); } } else { Log?.Warn("[Refresh] SongCore Loader.Instance is null."); } } catch (Exception ex) { Log?.Error($"[Refresh] Error requesting refresh: {ex.Message}"); Log?.Debug(ex); }
+            try { if (Loader.Instance != null) { Loader.Instance.RefreshSongs(false); Log.Info("SongCore refresh requested."); } }
+            catch (Exception ex) { Log.Error($"Refresh ReqErr: {ex.Message}"); }
         }
 
-        /// <summary>Safely attempts to delete a directory recursively.</summary>
-        internal void TryDeleteDirectory(string path) // (Unchanged)
+        internal bool TryDeleteDirectory(string p)
         {
-             if (string.IsNullOrEmpty(path)) return; string dirName = Path.GetFileName(path); try { if (Directory.Exists(path)) { Log?.Debug($"[Cleanup] Deleting directory: {dirName}"); Directory.Delete(path, true); Log?.Debug($"[Cleanup] Deleted: {dirName}"); } } catch (Exception cleanEx) { Log?.Warn($"[Cleanup] Failed delete '{dirName}': {cleanEx.Message}"); Log?.Debug(cleanEx); }
+            if (string.IsNullOrEmpty(p)) return false;
+            try { if (Directory.Exists(p)) { Directory.Delete(p, true); return true; } } catch (Exception ex) { Log.Error($"Cleanup Fail: {ex.Message}"); }
+            return false;
         }
         #endregion
     }
