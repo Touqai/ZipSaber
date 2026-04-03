@@ -1,34 +1,14 @@
-<<<<<<< Updated upstream
 {
   "$schema": "https://raw.githubusercontent.com/beat-saber-modding-group/BSIPA-MetadataFileSchema/master/Schema.json",
   "id": "ZipSaber",
   "name": "ZipSaber",
   "author": "Touqai",
-  "version": "1.2.0",
-  "description": "Drag and drop zip map files onto the Beat Saber window to automatically extract them to CustomWipLevels.",
-  "gameVersion": "1.29.1",
-  "dependsOn": {
-    "BSIPA": "^4.2.2",
-    "SongCore": "^3.9.0"
-    // Removed SiraUtil
-  },
-  "loadBefore": [],
-  "loadAfter": [
-    "SongCore" // Load after SongCore just in case
-  ],
-  "features": []
-=======
-{
-  "$schema": "https://raw.githubusercontent.com/beat-saber-modding-group/BSIPA-MetadataFileSchema/master/Schema.json",
-  "id": "ZipSaber",
-  "name": "ZipSaber",
-  "author": "Touqai",
-  "version": "1.5.1",
+  "version": "2.0.0",
   "description": "Drag and drop zip maps to CustomWipLevels, handling duplicates. Option to delete imported maps on game close.",
   "gameVersion": "1.40.8",
   "dependsOn": {
     "BSIPA": "^4.3.0",
-    "SongCore": "^3.15.0",
+    "SongCore": "^3.15.3",
     "BeatSaberMarkupLanguage": "^1.12.0"
   },
   "loadBefore": [],
@@ -39,5 +19,4 @@
   "features": [
       "Settings"
     ]
->>>>>>> Stashed changes
 }

@@ -1,0 +1,7 @@
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Release\ZipSaber.csproj.AssemblyReference.cache
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Release\ZipSaber.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Release\ZipSaber.AssemblyInfoInputs.cache
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Release\ZipSaber.AssemblyInfo.cs
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Release\ZipSaber.csproj.CoreCompileInputs.cache
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\bin\Release\ZipSaber.dll
+C:\Users\slash\Documents\ZipSaberMod\ZipSaber 1.29.1\obj\Release\ZipSaber.dll

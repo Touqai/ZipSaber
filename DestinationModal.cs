@@ -126,7 +126,6 @@ namespace ZipSaber
         {
             if (_screen != null && _bsmlParsed) return;
 
-            // Create a floating screen – 100x50 units, positioned in front of the player
             _screen = FloatingScreen.CreateFloatingScreen(
                 new Vector2(100, 55),
                 false,
@@ -135,6 +134,18 @@ namespace ZipSaber
 
             _screen.gameObject.name = "ZipSaber_PromptScreen";
             DontDestroyOnLoad(_screen.gameObject);
+
+            // Force this canvas to render on top of everything — fixes click-through
+            // and playlist icons appearing above the prompt
+            var canvas = _screen.GetComponent<Canvas>() ?? _screen.GetComponentInChildren<Canvas>();
+            if (canvas != null)
+            {
+                canvas.overrideSorting = true;
+                canvas.sortingOrder    = 32767; // maximum sorting order
+            }
+            // Also add a GraphicRaycaster so clicks are consumed by this screen
+            if (_screen.GetComponent<UnityEngine.EventSystems.BaseRaycaster>() == null)
+                _screen.gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
 
             string bsml = Utilities.GetResourceContent(
                 Assembly.GetExecutingAssembly(), "ZipSaber.destination-modal.bsml");

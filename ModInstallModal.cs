@@ -118,6 +118,11 @@ namespace ZipSaber
             DontDestroyOnLoad(_screen.gameObject);
             _screen.gameObject.SetActive(false);
 
+            var canvas = _screen.GetComponent<Canvas>() ?? _screen.GetComponentInChildren<Canvas>();
+            if (canvas != null) { canvas.overrideSorting = true; canvas.sortingOrder = 32767; }
+            if (_screen.GetComponent<UnityEngine.EventSystems.BaseRaycaster>() == null)
+                _screen.gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
             string bsml = Utilities.GetResourceContent(
                 Assembly.GetExecutingAssembly(), "ZipSaber.mod-install-modal.bsml");
             BSMLParser.Instance.Parse(bsml, _screen.gameObject, this);

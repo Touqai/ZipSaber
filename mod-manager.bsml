@@ -8,26 +8,24 @@
       <text text='~mod-count-label' font-size='3.5' align='Right' color='#AAAAAA'/>
     </horizontal>
 
-    <!-- Search bar + Browse button row -->
+    <!-- Search + Browse row -->
     <horizontal spacing='2' pad-left='1' pad-right='1' active='~list-visible'>
-      <string-setting value='search-text' on-change='search-changed'
-                      apply-on-change='true' placeholder='Search mods…'
-                      pref-width='82' pref-height='8'/>
-      <button text='Browse Mods' on-click='open-browse'
-              pref-width='28' pref-height='8'/>
+      <input-field id='search-field' text='~search-text' on-change='search-changed'
+                        placeholder='🔍 Search mods…' pref-width='82' pref-height='8'/>
+      <button text='Browse Mods' on-click='open-browse' pref-width='28' pref-height='8'/>
     </horizontal>
 
     <!-- Mod list -->
-    <scroll-view pref-height='64' pref-width='112' active='~list-visible'>
+    <scroll-view pref-height='62' pref-width='112' active='~list-visible'>
       <vertical id='mod-list-container' spacing='0.5' pad='1'
                 child-align='UpperCenter' vertical-fit='PreferredSize'>
       </vertical>
     </scroll-view>
 
-    <!-- Confirm panel — replaces list when a mod is selected -->
+    <!-- Confirm panel — replaces list -->
     <vertical id='confirm-panel' bg='round-rect-panel' pad='3' spacing='2'
               child-align='UpperCenter' active='~confirm-visible'
-              pref-width='112' pref-height='72'>
+              pref-width='112' pref-height='74'>
       <text text='~confirm-title' font-size='3.8' bold='true' align='Center'
             word-wrapping='true' pref-width='104'/>
       <text text='~dependency-warning' font-size='3' color='#FF6666'
