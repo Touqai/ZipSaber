@@ -48,6 +48,24 @@ namespace ZipSaber
             }
         }
 
+        [UIValue("custom-wip-folder")]
+        public string CustomWipFolder_UI
+        {
+            get => Plugin.Config?.CustomWipFolderName ?? "";
+            set
+            {
+                if (Plugin.Config == null) return;
+                // Sanitise: strip path separators and leading/trailing whitespace
+                string sanitised = (value ?? "").Trim()
+                    .Replace("/", "").Replace("\\", "").Replace(":", "");
+                Plugin.Config.CustomWipFolderName = sanitised;
+                Plugin.Log?.Info($"[Settings] CustomWipFolderName → '{sanitised}'");
+                // Recalculate immediately so the next drop uses the new path
+                Plugin.RecalculateWipPath();
+                NotifyPropertyChanged(nameof(CustomWipFolder_UI));
+            }
+        }
+
         protected override void DidActivate(bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling)
         {
             base.DidActivate(firstActivation, addedToHierarchy, screenSystemEnabling);
@@ -55,6 +73,7 @@ namespace ZipSaber
             // Push current config values to BSML UI
             NotifyPropertyChanged(nameof(DeleteOnClose_UI));
             NotifyPropertyChanged(nameof(ShowDestinationPrompt_UI));
+            NotifyPropertyChanged(nameof(CustomWipFolder_UI));
         }
     }
 }

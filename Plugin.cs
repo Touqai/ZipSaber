@@ -58,6 +58,7 @@ namespace ZipSaber
         private static string          CustomWipLevelsPath;
         private static string          CustomLevelsPath;
         private static string          PluginsPath;
+        private static string          InstallDirPath;   // cached so WIP path can be recalculated without re-deriving from dataPath
         private static bool            hooksAttempted = false;
         private static bool            hooksActive    = false;
 
@@ -201,26 +202,59 @@ namespace ZipSaber
                 DirectoryInfo dataDir    = new DirectoryInfo(gdp);
                 DirectoryInfo installDir = dataDir.Parent;
                 if (installDir == null) { Log.Error("Parent dir null!"); return; }
-                if (string.IsNullOrEmpty(CustomWipLevelsPath))
-                {
-                    CustomWipLevelsPath = Path.Combine(installDir.FullName, BeatSaberDataFolderName, CustomWipLevelsFolderName);
-                    Log.Info($"WIP Path: {CustomWipLevelsPath}");
-                    EnsureDirectoryExists(CustomWipLevelsPath, "WIPPath");
-                }
+
+                InstallDirPath = installDir.FullName;
+
+                // WIP path: always (re)calculated so a config change takes effect immediately
+                RecalculateWipPath();
+
                 if (string.IsNullOrEmpty(CustomLevelsPath))
                 {
-                    CustomLevelsPath = Path.Combine(installDir.FullName, BeatSaberDataFolderName, CustomLevelsFolderName);
+                    CustomLevelsPath = Path.Combine(InstallDirPath, BeatSaberDataFolderName, CustomLevelsFolderName);
                     Log.Info($"Custom Path: {CustomLevelsPath}");
                     EnsureDirectoryExists(CustomLevelsPath, "CustomPath");
                 }
                 if (string.IsNullOrEmpty(PluginsPath))
                 {
-                    PluginsPath = Path.Combine(installDir.FullName, "Plugins");
+                    PluginsPath = Path.Combine(InstallDirPath, "Plugins");
                     Log.Info($"Plugins Path: {PluginsPath}");
                     EnsureDirectoryExists(PluginsPath, "PluginsPath");
                 }
             }
             catch (Exception e) { Log.Error($"PathFail: {e.Message}\n{e}"); }
+        }
+
+        /// <summary>
+        /// Recalculates CustomWipLevelsPath from the current config value.
+        /// Call this whenever CustomWipFolderName changes in settings.
+        /// </summary>
+        internal static void RecalculateWipPath()
+        {
+            if (string.IsNullOrEmpty(InstallDirPath)) return;
+            try
+            {
+                string folderName = GetWipFolderName();
+                string newPath = Path.Combine(InstallDirPath, BeatSaberDataFolderName, folderName);
+                if (newPath == CustomWipLevelsPath) return;
+                CustomWipLevelsPath = newPath;
+                Log.Info($"WIP Path: {CustomWipLevelsPath}");
+                Instance?.EnsureDirectoryExists(CustomWipLevelsPath, "WIPPath");
+            }
+            catch (Exception e) { Log.Error($"WipPathFail: {e.Message}"); }
+        }
+
+        /// <summary>
+        /// The folder name actually in use — either the user's custom value or the default.
+        /// </summary>
+        internal static string GetWipFolderName()
+        {
+            string custom = Config?.CustomWipFolderName?.Trim() ?? "";
+            // Reject anything that looks like an absolute path or contains separators
+            if (!string.IsNullOrEmpty(custom) &&
+                custom.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 &&
+                !Path.IsPathRooted(custom))
+                return custom;
+            return CustomWipLevelsFolderName;
         }
 
         private bool EnsureDirectoryExists(string p, string ctx)

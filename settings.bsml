@@ -11,12 +11,17 @@
     <bool-setting text='Select Map Prompt'
                   value='show-destination-prompt'
                   apply-on-change='true'
-                  hover-hint='When ON, a prompt appears after each drop asking whether the map goes to CustomWipLevels or CustomLevels. When OFF, all maps go straight to CustomWipLevels.'/>
+                  hover-hint='When ON, a prompt appears after each drop asking whether the map goes to your WIP folder or CustomLevels. When OFF, all maps go straight to your WIP folder.'/>
 
     <bool-setting text='Delete WIP Maps on Game Close'
                   value='delete-on-close'
                   apply-on-change='true'
-                  hover-hint='If enabled, maps imported into CustomWipLevels during this session will be deleted when you exit Beat Saber.'/>
+                  hover-hint='If enabled, maps imported into your WIP folder during this session will be deleted when you exit Beat Saber.'/>
+
+    <string-setting text='WIP Folder Name'
+                    value='custom-wip-folder'
+                    apply-on-change='true'
+                    hover-hint='Folder name inside Beat Saber_Data to import WIP maps into. Leave blank to use the default CustomWipLevels. Example: TestplayLevels'/>
 
   </vertical>
 

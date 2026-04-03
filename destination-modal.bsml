@@ -14,9 +14,9 @@
   <text text='~map-name-label' font-size='3.2' align='Center' italics='true'
         word-wrapping='true' pref-width='88'/>
 
-  <!-- Buttons -->
+  <!-- Buttons — WIP label is dynamic so it reflects the configured folder name -->
   <horizontal spacing='6' pad-top='2'>
-    <button text='Custom WIP Levels'
+    <button text='~wip-button-label'
             on-click='destination-wip'
             pref-width='38' pref-height='12'/>
     <button text='Custom Levels'

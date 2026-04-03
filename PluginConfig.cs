@@ -19,12 +19,19 @@ namespace ZipSaber
         /// <summary>Show a prompt asking whether to put dropped maps in CustomWipLevels or CustomLevels.</summary>
         public virtual bool ShowDestinationPrompt { get; set; } = true;
 
+        /// <summary>
+        /// Custom folder name for WIP map imports, relative to Beat Saber_Data.
+        /// Empty string means use the default "CustomWipLevels".
+        /// </summary>
+        public virtual string CustomWipFolderName { get; set; } = "";
+
         public virtual void OnReload() { }
         public virtual void Changed() { }
         public virtual void CopyFrom(PluginConfig other)
         {
-            DeleteOnClose = other.DeleteOnClose;
+            DeleteOnClose         = other.DeleteOnClose;
             ShowDestinationPrompt = other.ShowDestinationPrompt;
+            CustomWipFolderName   = other.CustomWipFolderName;
         }
     }
 }

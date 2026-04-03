@@ -41,6 +41,7 @@ namespace ZipSaber
         // Direct TMP references — set after BSML parse, updated directly (bypasses BSML binding)
         private TextMeshProUGUI _mapNameTMP    = null;
         private TextMeshProUGUI _autoCancelTMP = null;
+        private TextMeshProUGUI _wipButtonTMP  = null;
 
         private struct PendingBatch
         {
@@ -54,6 +55,9 @@ namespace ZipSaber
 
         [UIValue("auto-cancel-label")]
         public string AutoCancelLabel { get; private set; } = "Auto closes in 20s…";
+
+        [UIValue("wip-button-label")]
+        public string WipButtonLabel => Plugin.GetWipFolderName();
 
         // Required by BSML even if we don't use it for live updates
         public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
@@ -123,6 +127,7 @@ namespace ZipSaber
                 // Update TMP components directly — reliable regardless of BSML binding
                 if (_mapNameTMP    != null) _mapNameTMP.text    = _current.DisplayLabel;
                 if (_autoCancelTMP != null) _autoCancelTMP.text = "Auto closes in 20s…";
+                if (_wipButtonTMP  != null) _wipButtonTMP.text  = Plugin.GetWipFolderName();
 
                 StopAutoCancel();
                 _autoCancelCo = StartCoroutine(AutoCancelCountdown());
@@ -234,15 +239,17 @@ namespace ZipSaber
         private void FindTMPRefs()
         {
             if (_screen == null) return;
-            _mapNameTMP = null; _autoCancelTMP = null;
+            _mapNameTMP = null; _autoCancelTMP = null; _wipButtonTMP = null;
             foreach (var tmp in _screen.GetComponentsInChildren<TextMeshProUGUI>(true))
             {
                 if (tmp.text == "Auto closes in 20s…")
                     _autoCancelTMP = tmp;
                 else if (tmp.text == MapNameLabel && !string.IsNullOrEmpty(MapNameLabel))
                     _mapNameTMP = tmp;
+                else if (tmp.text == WipButtonLabel)
+                    _wipButtonTMP = tmp;
             }
-            Plugin.Log?.Debug($"[Modal] TMP refs: mapTMP={((_mapNameTMP != null) ? "OK" : "null")}, cancelTMP={((_autoCancelTMP != null) ? "OK" : "null")}");
+            Plugin.Log?.Debug($"[Modal] TMP refs: mapTMP={((_mapNameTMP != null) ? "OK" : "null")}, cancelTMP={((_autoCancelTMP != null) ? "OK" : "null")}, wipTMP={((_wipButtonTMP != null) ? "OK" : "null")}");
         }
 
         private void HideScreen()
