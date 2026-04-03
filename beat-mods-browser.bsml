@@ -1,0 +1,24 @@
+<bg xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
+    xsi:schemaLocation='https://monkeymanboy.github.io/BSML-Docs/ https://raw.githubusercontent.com/monkeymanboy/BSML-Docs/gh-pages/BSMLSchema.xsd'>
+  <vertical spacing='1' pad='2' vertical-fit='PreferredSize' child-align='UpperCenter'>
+
+    <!-- Header -->
+    <horizontal bg='panel-top' pad-left='3' pad-right='3' pad-top='1' pad-bottom='1'>
+      <text text='Browse BeatMods' font-size='4.5' bold='true' align='Left' flexible-width='1'/>
+      <text text='~status-label' font-size='3' align='Right' color='#AAAAAA' pref-width='50'/>
+    </horizontal>
+
+    <!-- Search bar -->
+    <string-setting value='search-text' on-change='search-changed'
+                    apply-on-change='true' placeholder='Search available mods…'
+                    pref-width='110' pref-height='8'/>
+
+    <!-- Mod list -->
+    <scroll-view pref-height='68' pref-width='112'>
+      <vertical id='mod-list-container' spacing='0.5' pad='1'
+                child-align='UpperCenter' vertical-fit='PreferredSize'>
+      </vertical>
+    </scroll-view>
+
+  </vertical>
+</bg>

@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 {
   "$schema": "https://raw.githubusercontent.com/beat-saber-modding-group/BSIPA-MetadataFileSchema/master/Schema.json",
   "id": "ZipSaber",
@@ -16,4 +17,27 @@
     "SongCore" // Load after SongCore just in case
   ],
   "features": []
+=======
+{
+  "$schema": "https://raw.githubusercontent.com/beat-saber-modding-group/BSIPA-MetadataFileSchema/master/Schema.json",
+  "id": "ZipSaber",
+  "name": "ZipSaber",
+  "author": "Touqai",
+  "version": "1.5.1",
+  "description": "Drag and drop zip maps to CustomWipLevels, handling duplicates. Option to delete imported maps on game close.",
+  "gameVersion": "1.40.8",
+  "dependsOn": {
+    "BSIPA": "^4.3.0",
+    "SongCore": "^3.15.0",
+    "BeatSaberMarkupLanguage": "^1.12.0"
+  },
+  "loadBefore": [],
+  "loadAfter": [
+    "SongCore",
+    "BeatSaberMarkupLanguage"
+  ],
+  "features": [
+      "Settings"
+    ]
+>>>>>>> Stashed changes
 }

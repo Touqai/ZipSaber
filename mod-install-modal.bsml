@@ -1,0 +1,31 @@
+<vertical xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
+          xsi:schemaLocation='https://monkeymanboy.github.io/BSML-Docs/ https://raw.githubusercontent.com/monkeymanboy/BSML-Docs/gh-pages/BSMLSchema.xsd'
+          spacing='3' pad='4' child-align='UpperCenter'
+          bg='round-rect-panel'>
+
+  <!-- Title -->
+  <text text='Mod Installed' font-size='5.5' align='Center' bold='true'/>
+
+  <!-- Mod list label -->
+  <text text='~mod-list-label' font-size='3' align='Center'
+        word-wrapping='true' pref-width='88'/>
+
+  <!-- Info line -->
+  <text text='Restart required to load new mod(s).'
+        font-size='3.2' align='Center'/>
+
+  <!-- Buttons -->
+  <horizontal spacing='6' pad-top='2'>
+    <button text='Restart Now'
+            on-click='restart-now'
+            pref-width='38' pref-height='12'/>
+    <button text='Later'
+            on-click='restart-later'
+            pref-width='38' pref-height='12'/>
+  </horizontal>
+
+  <!-- Warning -->
+  <text text='The mod will not load until you restart.'
+        font-size='2.6' align='Center' italics='true' color='#FFAA44'/>
+
+</vertical>

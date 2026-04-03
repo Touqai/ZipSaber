@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZipSaber", "ZipSaber.csproj", "{5CC1908F-124F-6AEC-D0A8-716DAD4E5696}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5CC1908F-124F-6AEC-D0A8-716DAD4E5696}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5CC1908F-124F-6AEC-D0A8-716DAD4E5696}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5CC1908F-124F-6AEC-D0A8-716DAD4E5696}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5CC1908F-124F-6AEC-D0A8-716DAD4E5696}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4E66FB7A-6405-40FA-BAF3-D58D0B89D24E}
+	EndGlobalSection
+EndGlobal
