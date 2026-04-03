@@ -1,56 +1,75 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <!-- !!! IMPORTANT: Replace this path with YOUR Beat Saber installation directory !!! -->
-    <BeatSaberDir>G:\SteamLibrary\steamapps\common\Beat Saber</BeatSaberDir>
+    <!-- !!! IMPORTANT: Replace this path with YOUR 1.29.1 Beat Saber installation !!! -->
+    <BeatSaberDir>G:\SteamLibrary\steamapps\common\Beat Saber</BeatSaberDir> <!-- Example Path -->
 
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
     <AssemblyName>ZipSaber</AssemblyName>
     <RootNamespace>ZipSaber</RootNamespace>
-    <!-- Version indicating duplicate handling -->
-    <Version>1.4.0-DuplicateHandling</Version>
+    <Version>1.5.0-DeleteOnClose</Version> <!-- Or your desired version -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputPath>bin\$(Configuration)\</OutputPath>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems> <!-- Default items disabled -->
+    <Nullable>disable</Nullable>
+ </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>none</DebugType>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'"> <DebugType>portable</DebugType> </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'"> <DebugType>none</DebugType> </PropertyGroup>
-
   <ItemGroup>
-    <!-- Core Beat Saber & BSIPA Libraries -->
-    <!-- References are included, which will cause warnings if DLLs are missing -->
-
+    <!-- Core Game & BSIPA References -->
     <Reference Include="BSIPA">
-      <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\IPA.Loader.dll</HintPath>
-      <Private>False</Private>
+        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\IPA.Loader.dll</HintPath>
+        <Private>False</Private>
     </Reference>
-
     <Reference Include="UnityEngine">
-      <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.dll</HintPath>
-      <Private>False</Private>
+        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.dll</HintPath>
+        <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+        <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.UI.dll</HintPath>
+        <Private>False</Private>
+    </Reference>
+     <Reference Include="UnityEngine.UIElementsModule">
+      <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.UIElementsModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
-
-    <!-- Required for SongCore -->
-     <Reference Include="HMLib">
-      <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\HMLib.dll</HintPath>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.UIModule.dll</HintPath>
       <Private>False</Private>
+    </Reference>
+    <Reference Include="HMLib">
+        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\HMLib.dll</HintPath>
+        <Private>False</Private>
+    </Reference>
+     <Reference Include="HMUI">
+        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\HMUI.dll</HintPath>
+        <Private>False</Private>
     </Reference>
 
     <!-- Mod Dependencies -->
     <Reference Include="SongCore">
-      <HintPath>$(BeatSaberDir)\Plugins\SongCore.dll</HintPath>
-      <Private>False</Private>
+        <HintPath>$(BeatSaberDir)\Plugins\SongCore.dll</HintPath>
+        <Private>False</Private>
+    </Reference>
+     <Reference Include="BeatSaberMarkupLanguage">
+        <HintPath>$(BeatSaberDir)\Plugins\BSML.dll</HintPath> <!-- Ensure filename is BSML.dll -->
+        <Private>False</Private>
     </Reference>
 
-    <!-- No BSML dependency needed -->
-
-    <!-- .NET Framework Assemblies -->
+    <!-- System Assemblies -->
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.IO.Compression.FileSystem" />
@@ -63,12 +82,17 @@
     <Reference Include="System.Xml" />
     <Reference Include="System.Runtime"/>
 
-  </ItemGroup>
+    <!-- Explicit Compile Items (Required because EnableDefaultCompileItems is false) -->
+    <Compile Include="Plugin.cs" />
+    <Compile Include="PluginConfig.cs" />
+    <!--<Compile Include="UI\SettingsViewController.cs" /> -->
 
-  <ItemGroup>
-    <!-- Make sure you have a manifest.json suitable for this version -->
+    <!-- Embedded Resources -->
+   <!-- <EmbeddedResource Include="UI\SettingsViewController.bsml" />-->
     <EmbeddedResource Include="manifest.json" />
-  </ItemGroup>
+    <EmbeddedResource Include="settings.bsml" /> <!-- ADD THIS LINE -->
+
+ </ItemGroup>
 
   <Target Name="CopyFilesOnBuild" AfterTargets="Build">
     <Copy SourceFiles="$(OutputPath)\$(AssemblyName).dll" DestinationFolder="$(BeatSaberDir)\Plugins\" />
