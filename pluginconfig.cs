@@ -12,14 +12,19 @@ namespace ZipSaber
         public static PluginConfig Instance { get; set; }
 
         [NonNullable]
-        public virtual bool DeleteOnClose { get; set; } = false; // Default: Do not delete
+        /// <summary>Delete WIP maps imported this session when the game closes.</summary>
+        public virtual bool DeleteOnClose { get; set; } = false;
+
+        [NonNullable]
+        /// <summary>Show a prompt asking whether to put dropped maps in CustomWipLevels or CustomLevels.</summary>
+        public virtual bool ShowDestinationPrompt { get; set; } = true;
 
         public virtual void OnReload() { }
         public virtual void Changed() { }
         public virtual void CopyFrom(PluginConfig other)
         {
-            // Manually copy virtual properties if needed
             DeleteOnClose = other.DeleteOnClose;
+            ShowDestinationPrompt = other.ShowDestinationPrompt;
         }
     }
 }

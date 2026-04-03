@@ -4,16 +4,16 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2484377e-eb0f-432e-8f53-25992aa5ed5f" name="Changes" comment="" />
+    <list default="true" id="ab7289f9-419f-412d-a865-acae595767b4" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="ProjectColorInfo">{
-  &quot;associatedIndex&quot;: 2
+  &quot;associatedIndex&quot;: 3
 }</component>
-  <component name="ProjectId" id="3BopWgyklfS7ll5J6JnGV7MPRI3" />
+  <component name="ProjectId" id="3Bq7R82DfDt47eDoZ2qwW3l3Ag9" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
@@ -27,7 +27,6 @@
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;SolutionBuilderGeneralOptionsPage&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
@@ -49,18 +48,14 @@
   </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
-      <changelist id="2484377e-eb0f-432e-8f53-25992aa5ed5f" name="Changes" comment="" />
-      <created>1775165311711</created>
+      <changelist id="ab7289f9-419f-412d-a865-acae595767b4" name="Changes" comment="" />
+      <created>1775204737128</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
-      <updated>1775165311711</updated>
-      <workItem from="1775165312778" duration="258000" />
-      <workItem from="1775165606203" duration="1108000" />
-      <workItem from="1775166912709" duration="898000" />
-      <workItem from="1775167880312" duration="759000" />
-      <workItem from="1775169896956" duration="2000" />
-      <workItem from="1775169927184" duration="5695000" />
-      <workItem from="1775176204779" duration="2143000" />
+      <updated>1775204737128</updated>
+      <workItem from="1775204737833" duration="8256000" />
+      <workItem from="1775238633478" duration="639000" />
+      <workItem from="1775240110100" duration="13000" />
     </task>
     <servers />
   </component>

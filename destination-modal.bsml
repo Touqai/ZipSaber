@@ -1,0 +1,35 @@
+<vertical xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
+          xsi:schemaLocation='https://monkeymanboy.github.io/BSML-Docs/ https://raw.githubusercontent.com/monkeymanboy/BSML-Docs/gh-pages/BSMLSchema.xsd'
+          spacing='3' pad='4' child-align='UpperCenter'
+          bg='round-rect-panel'>
+
+  <!-- Title row with X button -->
+  <horizontal child-align='MiddleCenter' spacing='2'>
+    <text text='Where should this map go?' font-size='5' align='Center' bold='true' flexible-width='1'/>
+    <button text='✕' on-click='destination-cancel'
+            pref-width='10' pref-height='10' font-size='4'/>
+  </horizontal>
+
+  <!-- Map name -->
+  <text text='~map-name-label' font-size='3.2' align='Center' italics='true'
+        word-wrapping='true' pref-width='88'/>
+
+  <!-- Buttons -->
+  <horizontal spacing='6' pad-top='2'>
+    <button text='Custom WIP Levels'
+            on-click='destination-wip'
+            pref-width='38' pref-height='12'/>
+    <button text='Custom Levels'
+            on-click='destination-custom'
+            pref-width='38' pref-height='12'/>
+  </horizontal>
+
+  <!-- Note -->
+  <text text='Note: Auto-delete on close only applies to WIP maps.'
+        font-size='2.8' align='Center' italics='true' color='#AAAAAA'/>
+
+  <!-- Auto-cancel countdown -->
+  <text text='~auto-cancel-label'
+        font-size='2.4' align='Center' italics='true' color='#888888'/>
+
+</vertical>

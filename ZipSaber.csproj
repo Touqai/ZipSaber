@@ -1,21 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- !!! IMPORTANT: Replace this path with YOUR 1.29.1 Beat Saber installation !!! -->
-    <BeatSaberDir>G:\SteamLibrary\steamapps\common\Beat Saber</BeatSaberDir> <!-- Example Path -->
-
+    <BeatSaberPluginsDir>Z:\BSManager\BSInstances\1.29.1\Plugins</BeatSaberPluginsDir>
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
     <AssemblyName>ZipSaber</AssemblyName>
     <RootNamespace>ZipSaber</RootNamespace>
-    <Version>1.5.0-DeleteOnClose</Version> <!-- Or your desired version -->
+    <Version>2.0.0</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <OutputPath>bin\$(Configuration)\</OutputPath>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems> <!-- Default items disabled -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <Nullable>disable</Nullable>
- </PropertyGroup>
+  </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugType>portable</DebugType>
@@ -25,51 +23,66 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Core Game & BSIPA References -->
-    <Reference Include="BSIPA">
-        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\IPA.Loader.dll</HintPath>
-        <Private>False</Private>
+
+    <!-- ── BSIPA ──────────────────────────────────────────────────────────── -->
+    <Reference Include="IPA.Loader">
+      <HintPath>Libs\IPA.Loader.dll</HintPath>
+      <Private>False</Private>
     </Reference>
+
+    <!-- ── Unity Engine ───────────────────────────────────────────────────── -->
     <Reference Include="UnityEngine">
-        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.dll</HintPath>
-        <Private>False</Private>
+      <HintPath>Libs\UnityEngine.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
-        <Private>False</Private>
+      <HintPath>Libs\UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.UI.dll</HintPath>
-        <Private>False</Private>
+      <HintPath>Libs\UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
     </Reference>
-     <Reference Include="UnityEngine.UIElementsModule">
-      <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.UIElementsModule.dll</HintPath>
+    <Reference Include="UnityEngine.UIElementsModule">
+      <HintPath>Libs\UnityEngine.UIElementsModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UIModule">
-      <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\UnityEngine.UIModule.dll</HintPath>
+      <HintPath>Libs\UnityEngine.UIModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>Libs\Unity.TextMeshPro.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+
+    <!-- ── Beat Saber game assemblies ────────────────────────────────────── -->
+    <!-- Note: BeatSaber.ViewSystem did not exist as a separate DLL in 1.29.1;
+         its types (ViewController, FlowCoordinator) live in HMUI.dll / Main.dll -->
     <Reference Include="HMLib">
-        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\HMLib.dll</HintPath>
-        <Private>False</Private>
+      <HintPath>Libs\HMLib.dll</HintPath>
+      <Private>False</Private>
     </Reference>
-     <Reference Include="HMUI">
-        <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\HMUI.dll</HintPath>
-        <Private>False</Private>
+    <Reference Include="HMUI">
+      <HintPath>Libs\HMUI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Main">
+      <HintPath>Libs\Main.dll</HintPath>
+      <Private>False</Private>
     </Reference>
 
-    <!-- Mod Dependencies -->
+    <!-- ── Mod dependencies ───────────────────────────────────────────────── -->
     <Reference Include="SongCore">
-        <HintPath>$(BeatSaberDir)\Plugins\SongCore.dll</HintPath>
-        <Private>False</Private>
+      <HintPath>Libs\SongCore.dll</HintPath>
+      <Private>False</Private>
     </Reference>
-     <Reference Include="BeatSaberMarkupLanguage">
-        <HintPath>$(BeatSaberDir)\Plugins\BSML.dll</HintPath> <!-- Ensure filename is BSML.dll -->
-        <Private>False</Private>
+    <Reference Include="BeatSaberMarkupLanguage">
+      <HintPath>Libs\BSML.dll</HintPath>
+      <Private>False</Private>
     </Reference>
 
-    <!-- System Assemblies -->
+    <!-- ── .NET framework assemblies ─────────────────────────────────────── -->
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.IO.Compression.FileSystem" />
@@ -80,23 +93,37 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
-    <Reference Include="System.Runtime"/>
+    <Reference Include="System.Runtime" />
 
-    <!-- Explicit Compile Items (Required because EnableDefaultCompileItems is false) -->
+    <!-- ── Source files ───────────────────────────────────────────────────── -->
     <Compile Include="Plugin.cs" />
     <Compile Include="PluginConfig.cs" />
-    <!--<Compile Include="UI\SettingsViewController.cs" /> -->
+    <Compile Include="SettingsViewController.cs" />
+    <Compile Include="DestinationModal.cs" />
+    <Compile Include="MainThreadDispatcher.cs" />
+    <Compile Include="ModInstallModal.cs" />
+    <Compile Include="ModValidator.cs" />
+    <Compile Include="ModInfo.cs" />
+    <Compile Include="ModRegistry.cs" />
+    <Compile Include="ModManagerViewController.cs" />
+    <Compile Include="ModManagerFlowCoordinator.cs" />
+    <Compile Include="BeatModsBrowserViewController.cs" />
 
-    <!-- Embedded Resources -->
-   <!-- <EmbeddedResource Include="UI\SettingsViewController.bsml" />-->
+    <!-- ── Embedded resources ─────────────────────────────────────────────── -->
     <EmbeddedResource Include="manifest.json" />
-    <EmbeddedResource Include="settings.bsml" /> <!-- ADD THIS LINE -->
+    <EmbeddedResource Include="settings.bsml" />
+    <EmbeddedResource Include="destination-modal.bsml" />
+    <EmbeddedResource Include="mod-install-modal.bsml" />
+    <EmbeddedResource Include="mod-manager.bsml" />
+    <EmbeddedResource Include="beat-mods-browser.bsml" />
 
- </ItemGroup>
+  </ItemGroup>
 
+  <!-- Copy built DLL to Beat Saber Plugins folder after build -->
   <Target Name="CopyFilesOnBuild" AfterTargets="Build">
-    <Copy SourceFiles="$(OutputPath)\$(AssemblyName).dll" DestinationFolder="$(BeatSaberDir)\Plugins\" />
-    <Message Text="Copied $(AssemblyName).dll to $(BeatSaberDir)\Plugins\" Importance="High" />
+    <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll"
+          DestinationFolder="$(BeatSaberPluginsDir)" />
+    <Message Text="Copied $(AssemblyName).dll to $(BeatSaberPluginsDir)" Importance="High" />
   </Target>
 
 </Project>

@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\slash\\Documents\\ZipSaberMod\\ZipSaber 1.29.1\\ZipSaber.csproj": {}
+    "C:\\Users\\slash\\Documents\\VibeCoding\\ZipSaber-Dev 1.29.1\\ZipSaber.csproj": {}
   },
   "projects": {
-    "C:\\Users\\slash\\Documents\\ZipSaberMod\\ZipSaber 1.29.1\\ZipSaber.csproj": {
-      "version": "1.5.0-DeleteOnClose",
+    "C:\\Users\\slash\\Documents\\VibeCoding\\ZipSaber-Dev 1.29.1\\ZipSaber.csproj": {
+      "version": "2.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\slash\\Documents\\ZipSaberMod\\ZipSaber 1.29.1\\ZipSaber.csproj",
+        "projectUniqueName": "C:\\Users\\slash\\Documents\\VibeCoding\\ZipSaber-Dev 1.29.1\\ZipSaber.csproj",
         "projectName": "ZipSaber",
-        "projectPath": "C:\\Users\\slash\\Documents\\ZipSaberMod\\ZipSaber 1.29.1\\ZipSaber.csproj",
+        "projectPath": "C:\\Users\\slash\\Documents\\VibeCoding\\ZipSaber-Dev 1.29.1\\ZipSaber.csproj",
         "packagesPath": "C:\\Users\\slash\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\slash\\Documents\\ZipSaberMod\\ZipSaber 1.29.1\\obj\\",
+        "outputPath": "C:\\Users\\slash\\Documents\\VibeCoding\\ZipSaber-Dev 1.29.1\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
