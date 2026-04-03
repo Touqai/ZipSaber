@@ -3,9 +3,9 @@
   "id": "ZipSaber",
   "name": "ZipSaber",
   "author": "Touqai",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Drag and drop zip maps to CustomWipLevels, handling duplicates. Option to delete imported maps on game close.",
-  "gameVersion": "1.40.8",
+  "gameVersion": "1.42.0",
   "dependsOn": {
     "BSIPA": "^4.3.0",
     "SongCore": "^3.14.15",
