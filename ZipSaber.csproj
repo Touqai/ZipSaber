@@ -1,27 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!--
-      References point to the local Libs\ folder.
-      To update Libs\, copy fresh DLLs from your Beat Saber install:
-
-      Game DLLs (Beat Saber_Data\Managed\):
-        IPA.Loader.dll, UnityEngine.dll, UnityEngine.CoreModule.dll,
-        UnityEngine.UI.dll, UnityEngine.UIElementsModule.dll, UnityEngine.UIModule.dll,
-        UnityEngine.TextRenderingModule.dll, Unity.TextMeshPro.dll,
-        HMLib.dll, HMUI.dll, BeatSaber.ViewSystem.dll,
-        Main.dll, MainAssembly.dll
-
-      Mod DLLs (Plugins\):
-        SongCore.dll, BSML.dll
-    -->
     <BeatSaberPluginsDir>Z:\SteamLibrary\steamapps\common\Beat Saber\Plugins</BeatSaberPluginsDir>
-
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
     <AssemblyName>ZipSaber</AssemblyName>
     <RootNamespace>ZipSaber</RootNamespace>
-    <Version>1.5.1</Version>
+    <Version>2.7.2</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
@@ -66,7 +51,10 @@
       <HintPath>Libs\UnityEngine.UIModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <!-- TextMeshPro -->
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>Libs\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Unity.TextMeshPro">
       <HintPath>Libs\Unity.TextMeshPro.dll</HintPath>
       <Private>False</Private>
@@ -122,22 +110,38 @@
     <Compile Include="ModValidator.cs" />
     <Compile Include="ModInfo.cs" />
     <Compile Include="ModRegistry.cs" />
+    <Compile Include="ModToggleService.cs" />
+    <Compile Include="ModDetacher.cs" />
+    <Compile Include="FlatView.cs" />
+    <Compile Include="ViewportClickGuard.cs" />
+    <Compile Include="Theme.cs" />
+    <Compile Include="WipFolder.cs" />
+    <Compile Include="Clipboard.cs" />
+    <Compile Include="ScrollFix.cs" />
+    <Compile Include="IconFactory.cs" />
+    <Compile Include="UiKit.cs" />
+    <Compile Include="ManagerSettingsViewController.cs" />
+    <Compile Include="SlotAudio.cs" />
+    <Compile Include="GambleViewController.cs" />
+    <Compile Include="SlotEffects.cs" />
+    <Compile Include="CustomAssetInstaller.cs" />
     <Compile Include="ModManagerViewController.cs" />
     <Compile Include="ModManagerFlowCoordinator.cs" />
     <Compile Include="BeatModsBrowserViewController.cs" />
 
     <!-- ── Embedded resources ─────────────────────────────────────────────── -->
     <EmbeddedResource Include="manifest.json" />
-    <EmbeddedResource Include="settings.bsml" />
     <EmbeddedResource Include="destination-modal.bsml" />
     <EmbeddedResource Include="mod-install-modal.bsml" />
     <EmbeddedResource Include="mod-manager.bsml" />
     <EmbeddedResource Include="beat-mods-browser.bsml" />
+    <EmbeddedResource Include="zipsaber-settings.bsml" />
+    <EmbeddedResource Include="gamble.bsml" />
 
   </ItemGroup>
 
   <!-- Copy built DLL to Beat Saber Plugins folder after build -->
-  <Target Name="CopyFilesOnBuild" AfterTargets="Build">
+  <Target Name="CopyFilesOnBuild" AfterTargets="Build" Condition="Exists('$(BeatSaberPluginsDir)')">
     <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll"
           DestinationFolder="$(BeatSaberPluginsDir)" />
     <Message Text="Copied $(AssemblyName).dll to $(BeatSaberPluginsDir)" Importance="High" />

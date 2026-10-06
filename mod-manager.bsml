@@ -3,27 +3,40 @@
   <vertical spacing='1' pad='2' vertical-fit='PreferredSize' child-align='UpperCenter'>
 
     <!-- Header -->
-    <horizontal bg='panel-top' pad-left='3' pad-right='3' pad-top='1' pad-bottom='1'>
-      <text text='Mod Manager' font-size='4.5' bold='true' align='Left' flexible-width='1'/>
-      <text text='~mod-count-label' font-size='3.5' align='Right' color='#AAAAAA'/>
+    <horizontal bg='panel-top' pad-left='2' pad-right='3' pad-top='1' pad-bottom='1' spacing='2' child-align='MiddleLeft'>
+      <button text='&lt;' on-click='go-back' pref-width='9' pref-height='7' font-size='4'
+              hover-hint='Back to the main menu'/>
+      <vertical spacing='-1' child-align='MiddleLeft' flexible-width='1'>
+        <text id='zs-tag' text='ZIPSABER' font-size='2.4' color='#5FA8E8' bold='true' align='Left'/>
+        <text text='Mod Manager' font-size='4.5' bold='true' align='Left'/>
+      </vertical>
+      <text text='~mod-count-label' font-size='3.2' align='Right' color='#AAAAAA' rich-text='true'/>
+      <horizontal id='header-icons' spacing='1.5' child-align='MiddleRight' pref-height='7'>
+      </horizontal>
     </horizontal>
 
-    <!-- Search + Browse row -->
+    <!-- Toolbar: search + browse -->
     <horizontal spacing='2' pad-left='1' pad-right='1' active='~list-visible'>
-      <input-field id='search-field' text='~search-text' on-change='search-changed'
-                        placeholder='🔍 Search mods…' pref-width='82' pref-height='8'/>
-      <button text='Browse Mods' on-click='open-browse' pref-width='28' pref-height='8'/>
+      <string-setting text='Search' value='search-text' apply-on-change='true'
+                      on-change='search-changed' pref-width='84' pref-height='7'/>
+      <button text='Browse Mods' on-click='open-browse' pref-width='24' pref-height='7' font-size='3.2'/>
     </horizontal>
 
-    <!-- Mod list -->
-    <scroll-view pref-height='62' pref-width='112' active='~list-visible'>
-      <vertical id='mod-list-container' spacing='0.5' pad='1'
-                child-align='UpperCenter' vertical-fit='PreferredSize'>
+    <!-- Toolbar: sort -->
+    <horizontal pad-left='1' pad-right='1' active='~list-visible'>
+      <dropdown-list-setting text='Sort by' value='sort-mode' choices='sort-options'
+                             apply-on-change='true' on-change='sort-changed' pref-width='110' pref-height='7'/>
+    </horizontal>
+
+    <!-- Mod list — id used for scroll-to-top -->
+    <scroll-view id='mod-scroll-view' pref-height='52' pref-width='112' active='~list-visible'>
+      <vertical id='mod-list-container' spacing='0.6' pad='1'
+                child-align='UpperCenter' vertical-fit='PreferredSize' child-expand-width='true'>
       </vertical>
     </scroll-view>
 
-    <!-- Confirm panel — replaces list -->
-    <vertical id='confirm-panel' bg='round-rect-panel' pad='3' spacing='2'
+    <!-- Confirm panel -->
+    <vertical bg='round-rect-panel' pad='3' spacing='2'
               child-align='UpperCenter' active='~confirm-visible'
               pref-width='112' pref-height='74'>
       <text text='~confirm-title' font-size='3.8' bold='true' align='Center'
@@ -40,11 +53,34 @@
           <button text='Cancel' on-click='confirm-cancel'
                   pref-width='18' pref-height='9'/>
         </horizontal>
-        <text text='⚠ Deleting mods may cause game-breaking issues.'
+        <text text='Deleting mods may cause game-breaking issues.'
               font-size='2.8' color='#FF4444' italics='true' align='Center'/>
         <text text='~auto-cancel-label' font-size='2.8' color='#888888' align='Center'/>
       </vertical>
     </vertical>
+
+    <!-- Toggle (disable with dependents) confirm panel -->
+    <vertical bg='round-rect-panel' pad='3' spacing='2'
+              child-align='UpperCenter' active='~toggle-confirm-visible'
+              pref-width='112' pref-height='74'>
+      <text text='~toggle-confirm-title' font-size='3.8' bold='true' align='Center'
+            word-wrapping='true' pref-width='104'/>
+      <text text='~toggle-confirm-body' font-size='3' color='#FFAA44'
+            word-wrapping='true' align='Center' pref-width='104'/>
+      <horizontal spacing='1' child-align='MiddleCenter'>
+        <button text='Disable All' on-click='toggle-confirm-yes' pref-width='34' pref-height='9'/>
+        <button text='Cancel' on-click='toggle-confirm-cancel' pref-width='18' pref-height='9'/>
+      </horizontal>
+      <text text='~auto-cancel-label' font-size='2.8' color='#888888' align='Center'/>
+    </vertical>
+
+    <!-- Toggle status + reload banner (shown/hidden via SetActive in code) -->
+    <horizontal id='toggle-banner' spacing='2' pad-left='2' pad-right='2' child-align='MiddleCenter'>
+      <text text='~toggle-status' font-size='2.8' color='#88DDFF' align='Left'
+            word-wrapping='true' pref-width='84'/>
+      <button id='reload-btn' text='Reload Menu' on-click='reload-menu' pref-width='24' pref-height='6' font-size='3'
+              hover-hint='Soft-reloads the menu so toggled mods fully apply or unload. Does not restart the game.'/>
+    </horizontal>
 
     <!-- Pending footer -->
     <text text='~pending-label' font-size='3' color='#FFAA44'

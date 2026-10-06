@@ -3,21 +3,35 @@
   <vertical spacing='1' pad='2' vertical-fit='PreferredSize' child-align='UpperCenter'>
 
     <!-- Header -->
-    <horizontal bg='panel-top' pad-left='3' pad-right='3' pad-top='1' pad-bottom='1'>
-      <text text='Browse BeatMods' font-size='4.5' bold='true' align='Left' flexible-width='1'/>
+    <horizontal bg='panel-top' pad-left='2' pad-right='3' pad-top='1' pad-bottom='1' spacing='2' child-align='MiddleLeft'>
+      <button text='&lt;' on-click='go-back' pref-width='9' pref-height='7' font-size='4'
+              hover-hint='Back to the Mod Manager'/>
+      <vertical spacing='-1' child-align='MiddleLeft' flexible-width='1'>
+        <text id='zs-tag' text='ZIPSABER' font-size='2.4' color='#5FA8E8' bold='true' align='Left'/>
+        <text text='Browse BeatMods' font-size='4.5' bold='true' align='Left'/>
+      </vertical>
       <text text='~status-label' font-size='3' align='Right' color='#AAAAAA' pref-width='55'/>
     </horizontal>
 
     <!-- Search bar -->
-    <input-field id='browser-search' text='~search-text' on-change='search-changed'
-                      placeholder='🔍 Search available mods…' pref-width='110' pref-height='8'/>
+    <horizontal pad-left='1' pad-right='1' active='~list-visible'>
+      <string-setting text='Search' value='search-text' apply-on-change='true'
+                      on-change='search-changed' pref-width='110' pref-height='7'/>
+    </horizontal>
 
     <!-- Mod list -->
-    <scroll-view pref-height='54' pref-width='112' active='~list-visible'>
-      <vertical id='mod-list-container' spacing='0.5' pad='1'
-                child-align='UpperCenter' vertical-fit='PreferredSize'>
+    <scroll-view pref-height='44' pref-width='112' active='~list-visible'>
+      <vertical id='mod-list-container' spacing='0.6' pad='1'
+                child-align='UpperCenter' vertical-fit='PreferredSize' child-expand-width='true'>
       </vertical>
     </scroll-view>
+
+    <!-- What the hovered mod does -->
+    <vertical bg='round-rect-panel' pad-left='3' pad-right='3' pad-top='1' pad-bottom='1'
+              pref-width='110' pref-height='14' child-align='UpperLeft' active='~list-visible'>
+      <text text='~desc-text' font-size='2.9' align='TopLeft' word-wrapping='true'
+            rich-text='true' pref-width='104' pref-height='11'/>
+    </vertical>
 
     <!-- Install confirm panel -->
     <vertical bg='round-rect-panel' pad='3' spacing='2'

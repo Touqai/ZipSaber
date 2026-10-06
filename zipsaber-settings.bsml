@@ -1,0 +1,43 @@
+<bg xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
+    xsi:schemaLocation='https://monkeymanboy.github.io/BSML-Docs/ https://raw.githubusercontent.com/monkeymanboy/BSML-Docs/gh-pages/BSMLSchema.xsd'>
+  <vertical spacing='1.2' pad='2' vertical-fit='PreferredSize' child-align='UpperCenter'>
+
+    <!-- Header -->
+    <horizontal bg='panel-top' pad-left='2' pad-right='3' pad-top='1' pad-bottom='1' spacing='2' child-align='MiddleLeft' pref-width='112'>
+      <button text='&lt;' on-click='go-back' pref-width='9' pref-height='7' font-size='4' hover-hint='Back to the Mod Manager'/>
+      <vertical spacing='-1' child-align='MiddleLeft' flexible-width='1'>
+        <text id='zs-tag' text='ZIPSABER' font-size='2.4' color='#5FA8E8' bold='true' align='Left'/>
+        <text text='Settings' font-size='4.5' bold='true' align='Left'/>
+      </vertical>
+    </horizontal>
+
+    <!-- Maps -->
+    <vertical bg='round-rect-panel' pad-left='3' pad-right='3' pad-top='1' pad-bottom='1' spacing='0.5' pref-width='112' child-align='UpperLeft'>
+      <text id='sec-maps' text='MAPS' font-size='2.6' bold='true' color='#5FA8E8' align='Left'/>
+      <bool-setting text='Ask where dropped maps go' value='show-destination-prompt' apply-on-change='true'
+                    hover-hint='When on, dropping a map asks whether it goes to your WIP folder or CustomLevels.'/>
+      <bool-setting text='Delete dropped WIP maps when the game closes' value='delete-on-close' apply-on-change='true'
+                    hover-hint='Maps you dropped into the WIP folder this session are removed on exit.'/>
+      <horizontal spacing='2' child-align='MiddleLeft'>
+        <string-setting text='WIP map folder' value='wip-path-input' bind-value='true' apply-on-change='true' on-change='wip-path-changed'
+                        pref-width='68' pref-height='7'
+                        hover-hint='Full path to a folder for dropped WIP maps, e.g. D:\Beat Saber Maps\WIP. Leave empty for the default.'/>
+        <button text='Paste' on-click='wip-paste' pref-width='16' pref-height='7' font-size='3'
+                hover-hint='Use the folder path you copied (e.g. from File Explorer: right-click the folder > Copy as path).'/>
+        <button text='Default' on-click='wip-reset' pref-width='16' pref-height='7' font-size='3'/>
+      </horizontal>
+      <text text='~wip-status' font-size='2.5' color='#9A9AA6' align='Left' word-wrapping='true' pref-width='104' rich-text='true'/>
+    </vertical>
+
+    <!-- Appearance -->
+    <vertical bg='round-rect-panel' pad-left='3' pad-right='3' pad-top='1' pad-bottom='1' spacing='0.5' pref-width='112' child-align='UpperLeft'>
+      <text id='sec-look' text='APPEARANCE' font-size='2.6' bold='true' color='#5FA8E8' align='Left'/>
+      <slider-setting text='Accent colour' value='accent-hue' min='0' max='359' increment='1' integer-only='true'
+                      apply-on-change='true' on-change='hue-changed' formatter='hue-format' show-buttons='true' pref-width='104'
+                      hover-hint='Turn the knob to change the Mod Manager accent colour.'/>
+      <horizontal id='swatch-row' spacing='1.2' child-align='MiddleLeft' pref-height='7'>
+      </horizontal>
+    </vertical>
+
+  </vertical>
+</bg>

@@ -1,0 +1,38 @@
+<bg xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
+    xsi:schemaLocation='https://monkeymanboy.github.io/BSML-Docs/ https://raw.githubusercontent.com/monkeymanboy/BSML-Docs/gh-pages/BSMLSchema.xsd'>
+  <vertical spacing='1.2' pad='2' vertical-fit='PreferredSize' child-align='UpperCenter'>
+
+    <!-- Header -->
+    <horizontal bg='panel-top' pad-left='2' pad-right='3' pad-top='1' pad-bottom='1' spacing='2' child-align='MiddleLeft' pref-width='112'>
+      <button text='&lt;' on-click='go-back' pref-width='9' pref-height='7' font-size='4' hover-hint='Back to the Mod Manager'/>
+      <vertical spacing='-1' child-align='MiddleLeft' flexible-width='1'>
+        <text id='zs-tag' text='ZIPSABER' font-size='2.4' color='#5FA8E8' bold='true' align='Left'/>
+        <text text='Note Slots' font-size='4.5' bold='true' align='Left'/>
+      </vertical>
+      <text text='~stats-label' font-size='2.8' color='#9A9AA6' align='Right' rich-text='true'/>
+      <horizontal id='help-slot' child-align='MiddleRight' pref-height='7' pref-width='8'>
+      </horizontal>
+    </horizontal>
+
+    <horizontal spacing='2' child-align='UpperCenter' pref-width='112'>
+      <!-- The machine (built in code) -->
+      <vertical id='machine' bg='round-rect-panel' pref-width='62' pref-height='64'
+                pad-left='2' pad-right='2' pad-top='2' pad-bottom='2' spacing='1.5' child-align='UpperCenter'>
+      </vertical>
+
+      <!-- Rules -->
+      <vertical bg='round-rect-panel' pref-width='48' pref-height='64'
+                pad-left='2' pad-right='2' pad-top='1' pad-bottom='1' spacing='0.6' child-align='UpperLeft'>
+        <text id='how-title' text='HOW IT WORKS' font-size='2.6' bold='true' color='#5FA8E8' align='Left'/>
+        <text text='~rules-text' font-size='2.35' color='#C8C8D2' align='TopLeft' word-wrapping='true'
+              pref-width='44' rich-text='true'/>
+        <bool-setting text='I accept the risk' value='armed' apply-on-change='true' on-change='armed-changed'
+                      hover-hint='Required to spin. If you hit the jackpot, Beat Saber really closes.'/>
+        <text id='test-title' text='TEST A RESULT' font-size='2.4' bold='true' color='#5FA8E8' align='Left'/>
+        <horizontal id='test-row' spacing='1' child-align='MiddleLeft' pref-height='6'>
+        </horizontal>
+      </vertical>
+    </horizontal>
+
+  </vertical>
+</bg>
