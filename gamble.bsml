@@ -4,7 +4,7 @@
 
     <!-- Header -->
     <horizontal bg='panel-top' pad-left='2' pad-right='3' pad-top='1' pad-bottom='1' spacing='2' child-align='MiddleLeft' pref-width='112'>
-      <button text='&lt;' on-click='go-back' pref-width='9' pref-height='7' font-size='4' hover-hint='Back to the Mod Manager'/>
+      <horizontal id='back-slot' pref-width='9' pref-height='7' child-control-width='true' child-control-height='true'/>
       <vertical spacing='-1' child-align='MiddleLeft' flexible-width='1'>
         <text id='zs-tag' text='ZIPSABER' font-size='2.4' color='#5FA8E8' bold='true' align='Left'/>
         <text text='Note Slots' font-size='4.5' bold='true' align='Left'/>

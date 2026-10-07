@@ -83,6 +83,7 @@ namespace ZipSaber
         [UIComponent("how-title")] private TextMeshProUGUI _howTitle = null;
         [UIObject("machine")]      private GameObject _machine = null;
         [UIObject("help-slot")]    private GameObject _helpSlot = null;
+        [UIObject("back-slot")]    private GameObject _backSlot = null;
         [UIObject("test-row")]     private GameObject _testRow = null;
         [UIComponent("test-title")] private TextMeshProUGUI _testTitle = null;
 
@@ -122,6 +123,7 @@ namespace ZipSaber
             if (firstActivation)
             {
                 FlatView.Finish(this);
+                UiKit.SlotButton(_backSlot, "BackBtn", UiKit.Neutral, OnGoBack, "<", 4f);
                 _audio = SlotAudio.Create(transform);
                 BuildMachine();
                 BuildHelp();

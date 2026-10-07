@@ -28,6 +28,9 @@ namespace ZipSaber
 
         [UIValue("mod-count-label")]    public string ModCountLabel    { get; private set; } = "";
         [UIValue("confirm-title")]      public string ConfirmTitle     { get; private set; } = "";
+        [UIObject("confirm-host")]      private GameObject _confirmHost = null;
+        private InlinePrompt _card;
+        private InlinePrompt Card => _card ?? (_confirmHost != null ? (_card = InlinePrompt.Build(_confirmHost)) : null);
         [UIValue("confirm-visible")]    public bool   ConfirmVisible   { get; private set; } = false;
         [UIValue("list-visible")]       public bool   ListVisible      { get; private set; } = true;
         [UIValue("dependency-warning")] public string DependencyWarning { get; private set; } = "";
@@ -50,6 +53,9 @@ namespace ZipSaber
         [UIComponent("zs-tag")]     private TextMeshProUGUI _zsTag = null;
         [UIObject("header-icons")]  private GameObject _headerIcons = null;
         [UIObject("reload-btn")]    private GameObject _reloadBtnGo = null;
+        [UIObject("back-slot")]     private GameObject _backSlot    = null;
+        [UIObject("browse-slot")]   private GameObject _browseSlot  = null;
+        private UnityEngine.UI.Image _browseBtn, _reloadBtn;
 
         // Property setter does NOT call BuildRows — only OnSearchChanged does, preventing double-fire
         private string _searchText = "";
@@ -86,6 +92,8 @@ namespace ZipSaber
         private void OnThemeChanged()
         {
             if (_zsTag != null) _zsTag.color = Theme.Accent;
+            if (_browseBtn != null) UiKit.Recolor(_browseBtn, Theme.Accent);
+            if (_reloadBtn != null) UiKit.Recolor(_reloadBtn, Theme.Accent);
             BuildRows();
         }
 
@@ -103,7 +111,15 @@ namespace ZipSaber
         {
             if (firstActivation) FlatView.Prepare(this);   // before BSML builds the view
             base.DidActivate(firstActivation, addedToHierarchy, screenSystemEnabling);
-            if (firstActivation) FlatView.Finish(this);
+            if (firstActivation)
+            {
+                FlatView.Finish(this);
+                UiKit.SlotButton(_backSlot, "BackBtn", UiKit.Neutral, OnGoBack, "<", 4f);
+                _browseBtn = UiKit.SlotButton(_browseSlot, "BrowseBtn", Theme.Accent, OnOpenBrowse, "BROWSE MODS", 2.8f);
+                _reloadBtn = UiKit.SlotButton(_reloadBtnGo, "ReloadBtn", Theme.Accent, OnReloadMenu, "RELOAD MENU", 2.6f);
+            }
+            if (_browseBtn != null) UiKit.Recolor(_browseBtn, Theme.Accent);
+            if (_reloadBtn != null) UiKit.Recolor(_reloadBtn, Theme.Accent);
             Theme.Changed -= OnThemeChanged;
             Theme.Changed += OnThemeChanged;
             if (_zsTag != null) _zsTag.color = Theme.Accent;
@@ -158,10 +174,13 @@ namespace ZipSaber
                 ? string.Join(", ", dependents)
                 : string.Join(", ", dependents.Take(6)) + $" and {dependents.Count - 6} more";
             ToggleConfirmBody = $"These mods depend on it and will be disabled too:\n{list}";
-            ToggleConfirmVisible = true; ListVisible = false;
-            NotifyPropertyChanged(nameof(ToggleConfirmTitle));
-            NotifyPropertyChanged(nameof(ToggleConfirmBody));
-            NotifyPropertyChanged(nameof(ToggleConfirmVisible));
+            Card?.Set("DISABLE MOD", $"{mod.DisplayLabel}  v{mod.Version}",
+                $"<color=#C8C8D2>{dependents.Count} mod{(dependents.Count == 1 ? "" : "s")} depend on it and will be turned off too:</color>\n<b>{PromptUi.Esc(list)}</b>",
+                "<color=#9A9AA6>You can turn them all back on from the list later.</color>", null,
+                InlinePrompt.Btn.Primary("DISABLE ALL", OnToggleConfirmYes, 1.2f),
+                InlinePrompt.Btn.Neutral("CANCEL", OnToggleConfirmCancel, 0.8f));
+            ConfirmVisible = true; ListVisible = false;
+            NotifyPropertyChanged(nameof(ConfirmVisible));
             NotifyPropertyChanged(nameof(ListVisible));
             StopAutoCancel();
             _autoCancelCo = StartCoroutine(AutoCancelCountdown());
@@ -640,6 +659,14 @@ namespace ZipSaber
                 ? $"Required by: {(req.Count <= 3 ? string.Join(", ", req) : string.Join(", ", req.Take(3)) + $" and {req.Count - 3} more")}"
                 : "";
             DepWarnVisible = req.Any(); ConfirmVisible = true; ListVisible = false;
+            string body = req.Any()
+                ? $"<color=#FF8A8A><b>Required by:</b> {PromptUi.Esc(req.Count <= 4 ? string.Join(", ", req) : string.Join(", ", req.Take(4)) + $" and {req.Count - 4} more")}</color>\nThose mods may stop working."
+                : "<color=#C8C8D2>Removes the mod's DLL from your Plugins folder.</color>";
+            Card?.Set("DELETE MOD", $"{mod.DisplayLabel}  v{mod.Version}", body,
+                "Deleting mods may cause game-breaking issues.", new Color(1f, 0.37f, 0.42f),
+                InlinePrompt.Btn.Danger("RESTART & DELETE", OnConfirmRestart, 1.3f),
+                InlinePrompt.Btn.Neutral("DELETE ON CLOSE", OnConfirmClose, 1.2f),
+                InlinePrompt.Btn.Neutral("CANCEL", OnConfirmCancel, 0.7f));
             NotifyPropertyChanged(nameof(ConfirmTitle));
             NotifyPropertyChanged(nameof(DependencyWarning));
             NotifyPropertyChanged(nameof(DepWarnVisible));
@@ -661,13 +688,15 @@ namespace ZipSaber
 
         private IEnumerator AutoCancelCountdown()
         {
-            _autoCancelSec = 20;
-            while (_autoCancelSec > 0)
+            const float total = 20f;
+            float start = Time.unscaledTime;
+            while (true)
             {
-                AutoCancelLabel = $"Auto-cancelling in {_autoCancelSec}s…";
-                NotifyPropertyChanged(nameof(AutoCancelLabel));
-                yield return new WaitForSeconds(1f);
-                _autoCancelSec--;
+                float left = total - (Time.unscaledTime - start);
+                if (left <= 0f) break;
+                _autoCancelSec = Mathf.CeilToInt(left);
+                _card?.SetTimer(left / total, $"Cancels in {_autoCancelSec}s if you don't pick");
+                yield return null;
             }
             _selectedMod = null; HideConfirm();
         }

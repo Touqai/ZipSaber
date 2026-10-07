@@ -4,8 +4,7 @@
 
     <!-- Header -->
     <horizontal bg='panel-top' pad-left='2' pad-right='3' pad-top='1' pad-bottom='1' spacing='2' child-align='MiddleLeft'>
-      <button text='&lt;' on-click='go-back' pref-width='9' pref-height='7' font-size='4'
-              hover-hint='Back to the main menu'/>
+      <horizontal id='back-slot' pref-width='9' pref-height='7' child-control-width='true' child-control-height='true'/>
       <vertical spacing='-1' child-align='MiddleLeft' flexible-width='1'>
         <text id='zs-tag' text='ZIPSABER' font-size='2.4' color='#5FA8E8' bold='true' align='Left'/>
         <text text='Mod Manager' font-size='4.5' bold='true' align='Left'/>
@@ -19,7 +18,7 @@
     <horizontal spacing='2' pad-left='1' pad-right='1' active='~list-visible'>
       <string-setting text='Search' value='search-text' apply-on-change='true'
                       on-change='search-changed' pref-width='84' pref-height='7'/>
-      <button text='Browse Mods' on-click='open-browse' pref-width='24' pref-height='7' font-size='3.2'/>
+      <horizontal id='browse-slot' pref-width='24' pref-height='7' child-control-width='true' child-control-height='true'/>
     </horizontal>
 
     <!-- Toolbar: sort -->
@@ -35,51 +34,15 @@
       </vertical>
     </scroll-view>
 
-    <!-- Confirm panel -->
-    <vertical bg='round-rect-panel' pad='3' spacing='2'
-              child-align='UpperCenter' active='~confirm-visible'
-              pref-width='112' pref-height='74'>
-      <text text='~confirm-title' font-size='3.8' bold='true' align='Center'
-            word-wrapping='true' pref-width='104'/>
-      <text text='~dependency-warning' font-size='3' color='#FF6666'
-            word-wrapping='true' align='Center' pref-width='104'
-            active='~dep-warn-visible'/>
-      <vertical spacing='1.5' child-align='UpperCenter'>
-        <horizontal spacing='1' child-align='MiddleCenter'>
-          <button text='Restart &amp; Delete Now' on-click='confirm-restart'
-                  pref-width='44' pref-height='9'/>
-          <button text='Delete on Close' on-click='confirm-close'
-                  pref-width='34' pref-height='9'/>
-          <button text='Cancel' on-click='confirm-cancel'
-                  pref-width='18' pref-height='9'/>
-        </horizontal>
-        <text text='Deleting mods may cause game-breaking issues.'
-              font-size='2.8' color='#FF4444' italics='true' align='Center'/>
-        <text text='~auto-cancel-label' font-size='2.8' color='#888888' align='Center'/>
-      </vertical>
-    </vertical>
-
-    <!-- Toggle (disable with dependents) confirm panel -->
-    <vertical bg='round-rect-panel' pad='3' spacing='2'
-              child-align='UpperCenter' active='~toggle-confirm-visible'
-              pref-width='112' pref-height='74'>
-      <text text='~toggle-confirm-title' font-size='3.8' bold='true' align='Center'
-            word-wrapping='true' pref-width='104'/>
-      <text text='~toggle-confirm-body' font-size='3' color='#FFAA44'
-            word-wrapping='true' align='Center' pref-width='104'/>
-      <horizontal spacing='1' child-align='MiddleCenter'>
-        <button text='Disable All' on-click='toggle-confirm-yes' pref-width='34' pref-height='9'/>
-        <button text='Cancel' on-click='toggle-confirm-cancel' pref-width='18' pref-height='9'/>
-      </horizontal>
-      <text text='~auto-cancel-label' font-size='2.8' color='#888888' align='Center'/>
+    <!-- Confirm card (delete / disable-with-dependents), built in code -->
+    <vertical id='confirm-host' active='~confirm-visible' pref-width='112' pref-height='74'>
     </vertical>
 
     <!-- Toggle status + reload banner (shown/hidden via SetActive in code) -->
     <horizontal id='toggle-banner' spacing='2' pad-left='2' pad-right='2' child-align='MiddleCenter'>
       <text text='~toggle-status' font-size='2.8' color='#88DDFF' align='Left'
             word-wrapping='true' pref-width='84'/>
-      <button id='reload-btn' text='Reload Menu' on-click='reload-menu' pref-width='24' pref-height='6' font-size='3'
-              hover-hint='Soft-reloads the menu so toggled mods fully apply or unload. Does not restart the game.'/>
+      <horizontal id='reload-btn' pref-width='24' pref-height='6' child-control-width='true' child-control-height='true'/>
     </horizontal>
 
     <!-- Pending footer -->

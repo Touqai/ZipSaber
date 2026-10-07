@@ -21,6 +21,9 @@ namespace ZipSaber
         [UIComponent("sec-maps")] private TextMeshProUGUI _secMaps = null;
         [UIComponent("sec-look")] private TextMeshProUGUI _secLook = null;
         [UIObject("swatch-row")]  private GameObject _swatchRow = null;
+        [UIObject("back-slot")]   private GameObject _backSlot = null;
+        [UIObject("paste-slot")]  private GameObject _pasteSlot = null;
+        [UIObject("default-slot")] private GameObject _defaultSlot = null;
 
         private Image _preview;
         private string _wipStatus = "";
@@ -123,6 +126,9 @@ namespace ZipSaber
             if (firstActivation)
             {
                 FlatView.Finish(this);
+                UiKit.SlotButton(_backSlot, "BackBtn", UiKit.Neutral, OnGoBack, "<", 4f);
+                UiKit.SlotButton(_pasteSlot, "PasteBtn", UiKit.Neutral, OnWipPaste, "PASTE", 2.8f);
+                UiKit.SlotButton(_defaultSlot, "DefaultBtn", UiKit.Neutral, OnWipReset, "DEFAULT", 2.8f);
                 BuildSwatches();
             }
             Theme.Changed -= ApplyTheme;

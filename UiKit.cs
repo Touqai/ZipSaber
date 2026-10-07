@@ -91,6 +91,21 @@ namespace ZipSaber
         }
 
         /// <summary>A clickable, hover-highlighting rounded button. Returns the background image.</summary>
+        internal static readonly Color Neutral = new Color(0.16f, 0.16f, 0.21f, 0.95f);
+
+        /// <summary>Fill a BSML placeholder (horizontal with child-control) with a flat ZipSaber button.</summary>
+        internal static Image SlotButton(GameObject slot, string name, Color color, Action onClick, string label, float fontSize = 3f)
+        {
+            if (slot == null) return null;
+            var le0 = slot.GetComponent<UnityEngine.UI.LayoutElement>();
+            float w = le0 != null && le0.preferredWidth > 0 ? le0.preferredWidth : 20f;
+            float h = le0 != null && le0.preferredHeight > 0 ? le0.preferredHeight : 7f;
+            var img = Button(slot.transform, name, color, w, h, onClick, label, fontSize);
+            var le = img.GetComponent<UnityEngine.UI.LayoutElement>() ?? img.gameObject.AddComponent<UnityEngine.UI.LayoutElement>();
+            le.flexibleWidth = 1f; le.flexibleHeight = 1f;
+            return img;
+        }
+
         internal static Image Button(Transform parent, string name, Color color, float w, float h, Action onClick,
                                      string label = null, float fontSize = 2.8f, Sprite icon = null, float iconInset = 1.2f)
         {

@@ -42,6 +42,11 @@ namespace ZipSaber
         [UIValue("search-text")]
         public string SearchText { get => _searchText; set { _searchText = value; _scrollToTop = true; ApplyFilter(); } }
 
+        [UIObject("confirm-host")] private GameObject _confirmHost = null;
+        [UIObject("back-slot")]    private GameObject _backSlot = null;
+        private InlinePrompt _card;
+        private InlinePrompt Card => _card ?? (_confirmHost != null ? (_card = InlinePrompt.Build(_confirmHost)) : null);
+
         [UIValue("confirm-visible")]
         public bool ConfirmVisible { get; private set; } = false;
 
@@ -114,7 +119,11 @@ namespace ZipSaber
         {
             if (firstActivation) FlatView.Prepare(this);   // before BSML builds the view
             base.DidActivate(firstActivation, addedToHierarchy, screenSystemEnabling);
-            if (firstActivation) FlatView.Finish(this);
+            if (firstActivation)
+            {
+                FlatView.Finish(this);
+                UiKit.SlotButton(_backSlot, "BackBtn", UiKit.Neutral, OnGoBack, "<", 4f);
+            }
             if (_zsTag != null) _zsTag.color = Theme.Accent;
             if (!firstActivation && _allMods.Count == 0)
                 StartCoroutine(FetchMods());
@@ -414,6 +423,17 @@ namespace ZipSaber
         {
             _pendingInstall = mod;
             ConfirmTitle    = $"Install  {mod.Name}  v{mod.Version}?";
+            var meta = new List<string>();
+            if (!string.IsNullOrEmpty(mod.Category)) meta.Add(mod.Category);
+            if (!string.IsNullOrEmpty(mod.Author)) meta.Add("by " + mod.Author);
+            string desc = string.IsNullOrWhiteSpace(mod.Description) ? "" : mod.Description.Replace("\r", "").Replace("\n", " ").Replace("\n", " ").Trim();
+            if (desc.Length > 150) desc = desc.Substring(0, 147).TrimEnd() + "...";
+            Card?.Set("INSTALL FROM BEATMODS", $"{mod.Name}  v{mod.Version}",
+                $"<color=#8A8A99><size=90%>{PromptUi.Esc(string.Join("  ·  ", meta))}</size></color>\n<color=#C8C8D2>{PromptUi.Esc(desc)}</color>",
+                "<color=#F2C94C>Only install mods you trust</color><color=#9A9AA6> - mods run code on your PC. New mods load after a restart.</color>", null,
+                InlinePrompt.Btn.Primary("RESTART & INSTALL", OnInstallRestart, 1.3f),
+                InlinePrompt.Btn.Neutral("INSTALL ON CLOSE", OnInstallClose, 1.2f),
+                InlinePrompt.Btn.Neutral("CANCEL", OnInstallCancel, 0.7f));
             ConfirmVisible  = true;
             ListVisible     = false;
             NotifyPropertyChanged(nameof(ConfirmTitle));
@@ -435,13 +455,15 @@ namespace ZipSaber
 
         private IEnumerator AutoCancelCountdown()
         {
-            _autoCancelSec = 20;
-            while (_autoCancelSec > 0)
+            const float total = 20f;
+            float start = Time.unscaledTime;
+            while (true)
             {
-                AutoCancelLabel = $"Auto-cancelling in {_autoCancelSec}s…";
-                NotifyPropertyChanged(nameof(AutoCancelLabel));
-                yield return new WaitForSeconds(1f);
-                _autoCancelSec--;
+                float left = total - (Time.unscaledTime - start);
+                if (left <= 0f) break;
+                _autoCancelSec = Mathf.CeilToInt(left);
+                _card?.SetTimer(left / total, $"Cancels in {_autoCancelSec}s if you don't pick");
+                yield return null;
             }
             _pendingInstall = null; HideConfirm();
         }
