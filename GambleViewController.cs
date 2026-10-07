@@ -13,9 +13,9 @@ namespace ZipSaber
 {
     /// <summary>
     /// Note Slots: a three-reel slot machine made of Beat Saber notes.
+    ///   3 identical notes, same angle  → JACKPOT: 5 seconds of fireworks
     ///   3 dots                         → Beat Saber closes
     ///   3 bombs                        → the menu glitches out for 30 seconds (gentle, no flashing)
-    ///   3 identical notes, same angle  → 5 seconds of fireworks
     /// </summary>
     [ViewDefinition("ZipSaber.gamble.bsml")]
     internal class GambleViewController : BSMLAutomaticViewController
@@ -95,7 +95,7 @@ namespace ZipSaber
         private GameObject _helpPopup;
 
         [UIValue("stats-label")]
-        public string StatsLabel => $"{_spins} spins  <color=#7ED957>{_fullCombos} FC</color>  <color=#F2C94C>{_fireworks} fw</color>";
+        public string StatsLabel => $"{_spins} spins  <color=#7ED957>{_fullCombos} FC</color>  <color=#F2C94C>{_fireworks} jackpot{(_fireworks == 1 ? "" : "s")}</color>";
 
         [UIValue("rules-text")]
         public string RulesText =>
@@ -187,7 +187,7 @@ namespace ZipSaber
             _spinBtn = UiKit.Button(root, "Spin", Theme.Accent, 40, 9, OnSpin, "PULL THE LEVER", 3.4f);
             _spinLabel = _spinBtn.GetComponentInChildren<TextMeshProUGUI>();
 
-            _odds = UiKit.Text(root, "Odds", $"<color=#FF5E6B>3 dots = game closes</color>  <color=#77778A>({OneIn(OddsDots)})</color>", 2.4f, Color.white);
+            _odds = UiKit.Text(root, "Odds", $"<color=#F2C94C>Jackpot {OneIn(OddsFireworks)}</color>   <color=#FF5E6B>3 dots = game closes ({OneIn(OddsDots)})</color>", 2.4f, Color.white);
             UiKit.Size(_odds.gameObject, 56, 4);
 
             foreach (var r in _reels) r.ShowStatic(Roll());
@@ -229,11 +229,11 @@ namespace ZipSaber
             UiKit.Size(title.gameObject, -1, 5);
 
             HelpRow(col, new[] { N(Sym.RedDot), N(Sym.BlueDot), N(Sym.RedDot) },
-                "<color=#FF5E6B><b>3 dots</b></color>  Crashes your game. Beat Saber closes after a 5 second countdown.", OddsDots);
+                "<color=#FF5E6B><b>3 dots: CRASH</b></color>  Beat Saber closes after a 5 second countdown.", OddsDots);
             HelpRow(col, new[] { N(Sym.Bomb), N(Sym.Bomb), N(Sym.Bomb) },
                 "<color=#C58BFF><b>3 bombs</b></color>  The menu glitches out for 30 seconds. Gentle wobble, no flashing.", OddsBombs);
             HelpRow(col, new[] { N(Sym.BlueArrow, 0), N(Sym.BlueArrow, 0), N(Sym.BlueArrow, 0) },
-                "<color=#F2C94C><b>Same note, same direction</b></color>  Fireworks for 5 seconds.", OddsFireworks);
+                "<color=#F2C94C><b>JACKPOT</b></color>  Same note, same direction: fireworks for 5 seconds.", OddsFireworks);
             HelpRow(col, new[] { N(Sym.RedArrow, 0), N(Sym.RedArrow, 3), N(Sym.RedArrow, 5) },
                 "<color=#7ED957><b>3 arrows, same colour</b></color>  Full Combo!", OddsFullCombo);
             HelpRow(col, new[] { N(Sym.RedDot), N(Sym.BlueDot), N(Sym.BlueArrow, 1) },
@@ -283,7 +283,7 @@ namespace ZipSaber
             bool can = _armed && !_spinning && !_jackpotTriggered;
             UiKit.Recolor(_spinBtn, can ? Theme.Accent : new Color(0.22f, 0.22f, 0.26f, 1f));
             if (_spinLabel != null)
-                _spinLabel.text = _jackpotTriggered ? (_testSpin ? "TEST JACKPOT" : "GOODBYE") : _spinning ? (_testSpin ? "TEST SPIN..." : "SPINNING...") : _armed ? "PULL THE LEVER" : "ACCEPT THE RISK FIRST";
+                _spinLabel.text = _jackpotTriggered ? (_testSpin ? "TEST CRASH" : "GOODBYE") : _spinning ? (_testSpin ? "TEST SPIN..." : "SPINNING...") : _armed ? "PULL THE LEVER" : "ACCEPT THE RISK FIRST";
             var b = _spinBtn.GetComponent<Button>();
             if (b != null) b.interactable = can;
         }
@@ -303,10 +303,10 @@ namespace ZipSaber
             if (_testRow == null) return;
             var row = _testRow.transform;
             var c = new Color(0.18f, 0.18f, 0.24f, 0.95f);
-            UiKit.Button(row, "TDots",  c, 10, 6, () => ForceSpin(new[] { N(Sym.RedDot), N(Sym.BlueDot), N(Sym.RedDot) }), "DOTS", 2.2f);
+            UiKit.Button(row, "TDots",  c, 10, 6, () => ForceSpin(new[] { N(Sym.RedDot), N(Sym.BlueDot), N(Sym.RedDot) }), "CRASH", 2.2f);
             UiKit.Button(row, "TBombs", c, 10, 6, () => ForceSpin(new[] { N(Sym.Bomb), N(Sym.Bomb), N(Sym.Bomb) }), "BOMBS", 2.2f);
-            UiKit.Button(row, "TFw",    c, 11, 6, () => { int d = UnityEngine.Random.Range(0, 8); var s = UnityEngine.Random.value < 0.5f ? Sym.RedArrow : Sym.BlueArrow; ForceSpin(new[] { N(s, d), N(s, d), N(s, d) }); }, "FIREWK", 2.2f);
-            UiKit.Button(row, "TFc",    c, 8, 6,  () => ForceSpin(new[] { N(Sym.BlueArrow, 0), N(Sym.BlueArrow, 2), N(Sym.BlueArrow, 5) }), "FC", 2.2f);
+            UiKit.Button(row, "TFw",    c, 12, 6, () => { int d = UnityEngine.Random.Range(0, 8); var s = UnityEngine.Random.value < 0.5f ? Sym.RedArrow : Sym.BlueArrow; ForceSpin(new[] { N(s, d), N(s, d), N(s, d) }); }, "JACKPOT", 2.1f);
+            UiKit.Button(row, "TFc",    c, 7, 6,  () => ForceSpin(new[] { N(Sym.BlueArrow, 0), N(Sym.BlueArrow, 2), N(Sym.BlueArrow, 5) }), "FC", 2.2f);
         }
 
         private void ForceSpin(Note[] outcome)
@@ -369,8 +369,8 @@ namespace ZipSaber
             if (o[0].SameAs(o[1]) && o[1].SameAs(o[2]))
             {
                 _fireworks++;
-                _result.text = "<color=#F2C94C><b>PERFECT LINE!</b> Fireworks!</color>";
-                _audio.SmallWin();
+                _result.text = "<color=#F2C94C><b>JACKPOT!</b> Same note, same direction!</color>";
+                _audio.Jackpot();
                 foreach (var r in _reels) r.Celebrate();
                 Fireworks.Run(this, transform, 5f, _audio);
                 return;
@@ -399,14 +399,13 @@ namespace ZipSaber
             _audio.Lose();
         }
 
-        // ── Jackpot: the game closes ───────────────────────────────────────────────
+        // ── Three dots: the game closes ───────────────────────────────────────────────
         private void Jackpot()
         {
             _jackpotTriggered = true;
             RefreshSpinButton();
-            Plugin.Log?.Warn(_testSpin ? "[Slots] Test jackpot - countdown only, not closing." : "[Slots] JACKPOT - three dots. Closing Beat Saber as promised.");
-            _audio.Jackpot();
-            foreach (var r in _reels) r.Celebrate();
+            Plugin.Log?.Warn(_testSpin ? "[Slots] Test crash - countdown only, not closing." : "[Slots] Three dots - closing Beat Saber as promised.");
+            _audio.BombHit();
 
             // Runs on its own object so backing out of the menu doesn't save you.
             var go = new GameObject("ZipSaber_Jackpot");
@@ -418,7 +417,7 @@ namespace ZipSaber
         {
             if (this == null || _result == null) return;
             _result.text = n > 0
-                ? $"<color=#FF5E6B><b>JACKPOT!</b></color>  Closing in <b>{n}</b>"
+                ? $"<color=#FF5E6B><b>THREE DOTS.</b></color>  Closing in <b>{n}</b>"
                 : "<color=#FF5E6B><b>GOODBYE</b></color>";
             _audio?.Countdown(n);
             if (_title != null) _title.color = (n % 2 == 0) ? Theme.Accent : new Color(1f, 0.37f, 0.42f);

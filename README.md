@@ -29,7 +29,7 @@ Each mod in the Mod Manager has an On/Off button. Toggling applies immediately (
 ## Mod Manager extras
 - **Settings cog** (top right of the Mod Manager): drop-prompt and delete-on-close toggles, a custom WIP map folder, and an accent colour knob with presets that recolours the Mod Manager UI.
 - **Custom WIP folder**: point dropped WIP maps at any folder (full path). ZipSaber registers it with SongCore so the maps show up in the WIP pack. Hit *Default* to go back to `Beat Saber_Data/CustomWipLevels`.
-- **Note Slots** (slot machine icon): a three-reel slot machine made of Beat Saber notes. Tick *I accept the risk*, pull the lever. Three dots = Beat Saber closes, three bombs = the menu glitches out for 30 seconds (gentle, no flashing), three identical notes pointing the same way = 5 seconds of fireworks. Hover the ? for every result and its odds. Uses the game's own UI/cut/bomb sounds where available, with synthesized slot sounds filling the gaps.
+- **Note Slots** (slot machine icon): a three-reel slot machine made of Beat Saber notes. Tick *I accept the risk*, pull the lever. Jackpot = three identical notes pointing the same way: 5 seconds of fireworks. Three dots = Beat Saber closes, three bombs = the menu glitches out for 30 seconds (gentle, no flashing). Hover the ? for every result and its odds. Uses the game's own UI/cut/bomb sounds where available, with synthesized slot sounds filling the gaps.
 
 ## Drag and Drop Sabers, Notes & More
 Drop `.saber`/`.whacker` (CustomSabers), `.bloq`/`.note` (CustomNotes), `.plat` (CustomPlatforms), `.avatar` (CustomAvatars) or `.pixie`/`.box` (CustomWalls) files, or a zip of them, onto the game window. They're copied to the right folder and a popup tells you what was installed.
