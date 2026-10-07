@@ -40,7 +40,7 @@ namespace ZipSaber
         public string StatusLabel { get; private set; } = "Loading…";
 
         [UIValue("search-text")]
-        public string SearchText { get => _searchText; set { _searchText = value; ApplyFilter(); } }
+        public string SearchText { get => _searchText; set { _searchText = value; _scrollToTop = true; ApplyFilter(); } }
 
         [UIValue("confirm-visible")]
         public bool ConfirmVisible { get; private set; } = false;
@@ -62,6 +62,39 @@ namespace ZipSaber
 
         [UIObject("mod-list-container")]
         private GameObject _containerGo = null;
+
+        // ── Sorting ───────────────────────────────────────────────────────────────
+        internal const string SortNameAsc      = "Name (A-Z)";
+        internal const string SortNameDesc     = "Name (Z-A)";
+        internal const string SortNotInstalled = "Not installed first";
+        internal const string SortInstalled    = "Installed first";
+        internal const string SortCategory     = "Category";
+        internal const string SortUpdated      = "Recently updated";
+
+        [UIValue("sort-options")]
+        private List<object> SortOptions => new List<object>
+            { SortNameAsc, SortNameDesc, SortNotInstalled, SortInstalled, SortCategory, SortUpdated };
+
+        [UIValue("sort-mode")]
+        public string SortMode
+        {
+            get
+            {
+                string v = Plugin.Config?.BrowseSortMode;
+                return SortOptions.Contains(v) ? v : SortNameAsc;
+            }
+            set { if (Plugin.Config != null) Plugin.Config.BrowseSortMode = value; }
+        }
+
+        [UIAction("sort-changed")]
+        private void OnSortChanged(object val)
+        {
+            if (Plugin.Config != null) Plugin.Config.BrowseSortMode = val as string ?? SortNameAsc;
+            _scrollToTop = true;
+            BuildRows();
+        }
+
+        private bool _scrollToTop = true;
 
         // ── Lifecycle ─────────────────────────────────────────────────────────────
         [UIAction("#post-parse")]
@@ -158,7 +191,7 @@ namespace ZipSaber
             var parsed = ParseBeatModsJson(json);
             var deduped = parsed
                 .GroupBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.OrderByDescending(m => m.Version).First())
+                .Select(g => g.OrderByDescending(m => SafeVersion(m.Version)).First())
                 .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
@@ -211,11 +244,82 @@ namespace ZipSaber
             var pendingInstalls = new HashSet<string>(
                 ModManagerViewController.PendingInstalls, StringComparer.OrdinalIgnoreCase);
 
-            foreach (var mod in _filtered)
-                BuildRow(container, mod, installedIds.Contains(mod.Name), pendingInstalls.Contains(mod.Name));
+            var rows = _filtered.Select(m => new BRow
+            {
+                Mod = m,
+                Installed = installedIds.Contains(m.Name),
+                Queued = pendingInstalls.Contains(m.Name),
+            }).ToList();
 
-            Plugin.Log?.Info($"[BeatMods] Rendered {_filtered.Count} rows.");
-            ScrollFix.Refresh(this, _containerGo, toTop: true);
+            var cmp = StringComparer.OrdinalIgnoreCase;
+            string mode = SortMode;
+
+            switch (mode)
+            {
+                case SortNameDesc:
+                    rows = rows.OrderByDescending(r => r.Mod.Name, cmp).ToList(); break;
+                case SortUpdated:
+                    rows = rows.OrderByDescending(r => r.Mod.Updated).ThenBy(r => r.Mod.Name, cmp).ToList(); break;
+                case SortNotInstalled:
+                case SortInstalled:
+                {
+                    bool installedFirst = mode == SortInstalled;
+                    var avail = rows.Where(r => !r.Installed && !r.Queued).OrderBy(r => r.Mod.Name, cmp).ToList();
+                    var queued = rows.Where(r => r.Queued && !r.Installed).OrderBy(r => r.Mod.Name, cmp).ToList();
+                    var inst = rows.Where(r => r.Installed).OrderBy(r => r.Mod.Name, cmp).ToList();
+                    var order = installedFirst
+                        ? new[] { ("INSTALLED", inst), ("QUEUED", queued), ("NOT INSTALLED", avail) }
+                        : new[] { ("NOT INSTALLED", avail), ("QUEUED", queued), ("INSTALLED", inst) };
+                    BuildGrouped(container, order.ToList());
+                    goto Done;
+                }
+                case SortCategory:
+                {
+                    var byCat = rows.GroupBy(r => r.Mod.Category ?? "Other", cmp)
+                        .OrderBy(g => g.Key.Equals("Other", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+                        .ThenBy(g => g.Key, cmp)
+                        .Select(g => (g.Key.ToUpperInvariant(), g.OrderBy(r => r.Mod.Name, cmp).ToList()))
+                        .ToList();
+                    BuildGrouped(container, byCat);
+                    goto Done;
+                }
+                default:
+                    rows = rows.OrderBy(r => r.Mod.Name, cmp).ToList(); break;
+            }
+
+            foreach (var r in rows) BuildRow(container, r.Mod, r.Installed, r.Queued);
+
+        Done:
+            if (rows.Count == 0) BuildGroupHeader(container, "NO MODS MATCH YOUR SEARCH", -1);
+            Plugin.Log?.Debug($"[BeatMods] Rendered {rows.Count} rows ({mode}).");
+            ScrollFix.Refresh(this, _containerGo, _scrollToTop);
+            _scrollToTop = false;
+        }
+
+        private class BRow
+        {
+            internal BeatModsEntry Mod;
+            internal bool Installed, Queued;
+        }
+
+        private void BuildGrouped(Transform container, List<(string title, List<BRow> items)> groups)
+        {
+            foreach (var (title, items) in groups)
+            {
+                if (items.Count == 0) continue;
+                BuildGroupHeader(container, title, items.Count);
+                foreach (var r in items) BuildRow(container, r.Mod, r.Installed, r.Queued);
+            }
+        }
+
+        private void BuildGroupHeader(Transform parent, string title, int count)
+        {
+            var tmp = UiKit.Text(parent, "Header_" + title, count >= 0 ? $"{title}  <color=#666677>{count}</color>" : title,
+                                 2.8f, Theme.AccentShade(0.9f, 1f), TextAlignmentOptions.BottomLeft);
+            tmp.fontStyle = FontStyles.Bold; tmp.characterSpacing = 4;
+            tmp.margin = new Vector4(2, 0, 0, 0.5f);
+            var le = UiKit.Size(tmp.gameObject, -1, 5);
+            le.flexibleWidth = 1;
         }
 
         private void BuildRow(Transform parent, BeatModsEntry mod, bool installed, bool queued)
@@ -295,7 +399,11 @@ namespace ZipSaber
             if (desc.Length > 260) desc = desc.Substring(0, 257).TrimEnd() + "…";
             string status = installed ? "  <color=#55AA77><size=80%>INSTALLED</size></color>"
                           : queued    ? "  <color=#6688DD><size=80%>QUEUED</size></color>" : "";
-            _descText = $"<b>{Esc(mod.Name)}</b> <color=#777788><size=80%>v{Esc(mod.Version)}</size></color>{status}\n<color=#C8C8D2>{Esc(desc)}</color>";
+            var meta = new List<string> { mod.Category };
+            if (!string.IsNullOrEmpty(mod.Author)) meta.Add("by " + mod.Author);
+            if (mod.Updated > DateTime.MinValue) meta.Add("updated " + mod.Updated.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture));
+            string metaLine = $"  <color=#6E6E80><size=80%>{Esc(string.Join("  ·  ", meta))}</size></color>";
+            _descText = $"<b>{Esc(mod.Name)}</b> <color=#777788><size=80%>v{Esc(mod.Version)}</size></color>{status}{metaLine}\n<color=#C8C8D2>{Esc(desc)}</color>";
             NotifyPropertyChanged(nameof(DescText));
         }
 
@@ -491,44 +599,61 @@ namespace ZipSaber
             return mat;
         }
 
-        // ── Minimal JSON parser ───────────────────────────────────────────────────
+        // ── BeatMods JSON → entries ────────────────────────────────────────────────
         private static List<BeatModsEntry> ParseBeatModsJson(string json)
         {
             var result = new List<BeatModsEntry>();
             try
             {
-                int i = 0;
-                while (i < json.Length)
+                if (!(MiniJson.Parse(json) is List<object> mods)) return result;
+                foreach (var o in mods)
                 {
-                    int nameIdx = json.IndexOf("\"name\"", i, StringComparison.Ordinal);
-                    if (nameIdx < 0) break;
-                    string name    = ExtractStr(json, nameIdx);
-                    int verIdx     = json.IndexOf("\"version\"",     nameIdx, StringComparison.Ordinal);
-                    int descIdx    = json.IndexOf("\"description\"", nameIdx, StringComparison.Ordinal);
-                    int dlIdx      = json.IndexOf("\"downloads\"",   nameIdx, StringComparison.Ordinal);
-                    string version = verIdx  >= 0 ? ExtractStr(json, verIdx)  : "?";
-                    string desc    = descIdx >= 0 ? ExtractStr(json, descIdx) : "";
-                    string dlUrl   = "";
-                    if (dlIdx >= 0)
+                    if (!(o is Dictionary<string, object> m)) continue;
+                    string name = m.GetString("name");
+                    if (string.IsNullOrEmpty(name)) continue;
+
+                    string dlUrl = null;
+                    var downloads = m.GetList("downloads");
+                    if (downloads != null)
+                        foreach (var d in downloads)
+                        {
+                            var dd = d as Dictionary<string, object>;
+                            string type = dd.GetString("type");
+                            string u = dd.GetString("url");
+                            if (string.IsNullOrEmpty(u)) continue;
+                            // prefer universal/steam builds over oculus
+                            if (dlUrl == null || type == "universal" || type == "steam") dlUrl = u;
+                        }
+                    if (string.IsNullOrEmpty(dlUrl)) continue;
+                    if (!dlUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)) dlUrl = "https://beatmods.com" + dlUrl;
+
+                    DateTime.TryParse(m.GetString("updatedDate") ?? m.GetString("uploadDate"),
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+                        out DateTime updated);
+
+                    result.Add(new BeatModsEntry
                     {
-                        int urlIdx = json.IndexOf("\"url\"", dlIdx, StringComparison.Ordinal);
-                        if (urlIdx >= 0) dlUrl = "https://beatmods.com" + ExtractStr(json, urlIdx);
-                    }
-                    if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(dlUrl))
-                        result.Add(new BeatModsEntry { Name = name, Version = version, Description = desc, DownloadUrl = dlUrl });
-                    i = nameIdx + 6;
+                        Name        = name,
+                        Version     = m.GetString("version") ?? "?",
+                        Description = m.GetString("description") ?? "",
+                        DownloadUrl = dlUrl,
+                        Category    = string.IsNullOrWhiteSpace(m.GetString("category")) ? "Other" : m.GetString("category").Trim(),
+                        Author      = m.GetObj("author").GetString("username") ?? "",
+                        Updated     = updated,
+                        Required    = m.GetBool("required"),
+                    });
                 }
             }
             catch (Exception ex) { Plugin.Log?.Error($"[BeatMods] JSON parse: {ex.Message}"); }
             return result;
         }
 
-        private static string ExtractStr(string json, int keyIdx)
+        private static Version SafeVersion(string v)
         {
-            int colon = json.IndexOf(':', keyIdx); if (colon < 0) return "";
-            int q1    = json.IndexOf('"', colon + 1); if (q1 < 0) return "";
-            int q2    = json.IndexOf('"', q1 + 1);    if (q2 < 0) return "";
-            return json.Substring(q1 + 1, q2 - q1 - 1);
+            if (string.IsNullOrEmpty(v)) return new Version(0, 0);
+            string core = v.Split('-', '+')[0];
+            return Version.TryParse(core, out var ver) ? ver : new Version(0, 0);
         }
 
         internal class BeatModsEntry
@@ -537,6 +662,10 @@ namespace ZipSaber
             public string Version     { get; set; }
             public string Description { get; set; }
             public string DownloadUrl { get; set; }
+            public string Category    { get; set; } = "Other";
+            public string Author      { get; set; } = "";
+            public DateTime Updated   { get; set; }
+            public bool Required      { get; set; }
         }
     }
 }

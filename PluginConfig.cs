@@ -23,6 +23,9 @@ namespace ZipSaber
         public virtual string ModSortMode { get; set; } = "Name (A-Z)";
 
         /// <summary>Mod Manager accent colour as #RRGGBB.</summary>
+        /// <summary>Browse BeatMods sort order.</summary>
+        public virtual string BrowseSortMode { get; set; } = "Name (A-Z)";
+
         public virtual string AccentColor { get; set; } = "#5FA8E8";
 
         /// <summary>Custom folder for dropped WIP maps. Empty = Beat Saber_Data/CustomWipLevels.</summary>
@@ -36,6 +39,7 @@ namespace ZipSaber
             ShowDestinationPrompt = other.ShowDestinationPrompt;
             ModSortMode = other.ModSortMode;
             AccentColor = other.AccentColor;
+            BrowseSortMode = other.BrowseSortMode;
             CustomWipPath = other.CustomWipPath;
         }
     }

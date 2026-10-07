@@ -19,8 +19,14 @@
                       on-change='search-changed' pref-width='110' pref-height='7'/>
     </horizontal>
 
+    <!-- Sort -->
+    <horizontal pad-left='1' pad-right='1' active='~list-visible'>
+      <dropdown-list-setting text='Sort by' value='sort-mode' choices='sort-options'
+                             apply-on-change='true' on-change='sort-changed' pref-width='110' pref-height='7'/>
+    </horizontal>
+
     <!-- Mod list -->
-    <scroll-view pref-height='44' pref-width='112' active='~list-visible'>
+    <scroll-view pref-height='37' pref-width='112' active='~list-visible'>
       <vertical id='mod-list-container' spacing='0.6' pad='1'
                 child-align='UpperCenter' vertical-fit='PreferredSize' child-expand-width='true'>
       </vertical>

@@ -3,7 +3,7 @@
   "id": "ZipSaber",
   "name": "ZipSaber",
   "author": "Touqai",
-  "version": "2.7.2",
+  "version": "2.8.0",
   "description": "Drag and drop zip maps and mods into the game, plus an in-game mod manager: install from BeatMods, delete, and enable/disable mods live without restarting.",
   "gameVersion": "1.40.8",
   "dependsOn": {
