@@ -48,15 +48,20 @@ namespace ZipSaber
 
             p._title = UiKit.Text(t, "Title", "", 4.6f, Color.white, TextAlignmentOptions.TopLeft);
             p._title.fontStyle = FontStyles.Bold;
+            // no wrapping + room for the full line height, otherwise TMP hides the whole line
+            p._title.enableWordWrapping = false;
             p._title.overflowMode = TextOverflowModes.Ellipsis;
-            Top(p._title.rectTransform, 6f, 7f, 98f, 6.5f);
+            p._title.richText = true;
+            var tr = p._title.rectTransform;
+            tr.anchorMin = new Vector2(0, 1); tr.anchorMax = new Vector2(1, 1); tr.pivot = new Vector2(0.5f, 1f);
+            tr.offsetMin = new Vector2(6f, -16f); tr.offsetMax = new Vector2(-6f, -7f);
 
             p._body = UiKit.Text(t, "Body", "", 3f, new Color(0.85f, 0.85f, 0.9f), TextAlignmentOptions.TopLeft);
             p._body.enableWordWrapping = true;
             p._body.overflowMode = TextOverflowModes.Ellipsis;
             var br = p._body.rectTransform;
             br.anchorMin = new Vector2(0, 0); br.anchorMax = new Vector2(1, 1);
-            br.offsetMin = new Vector2(6f, 25f); br.offsetMax = new Vector2(-6f, -15.5f);
+            br.offsetMin = new Vector2(6f, 25f); br.offsetMax = new Vector2(-6f, -18f);
 
             p._note = UiKit.Text(t, "Note", "", 2.6f, new Color(1f, 0.42f, 0.42f), TextAlignmentOptions.BottomLeft);
             p._note.enableWordWrapping = true;

@@ -179,7 +179,7 @@ namespace ZipSaber
                 "<color=#9A9AA6>You can turn them all back on from the list later.</color>", null,
                 InlinePrompt.Btn.Primary("DISABLE ALL", OnToggleConfirmYes, 1.2f),
                 InlinePrompt.Btn.Neutral("CANCEL", OnToggleConfirmCancel, 0.8f));
-            ConfirmVisible = true; ListVisible = false;
+            ConfirmVisible = true; ListVisible = false; UpdateBanner();
             NotifyPropertyChanged(nameof(ConfirmVisible));
             NotifyPropertyChanged(nameof(ListVisible));
             StopAutoCancel();
@@ -223,7 +223,8 @@ namespace ZipSaber
             if (string.IsNullOrEmpty(_toggleStatus) && reload)
                 _toggleStatus = $"{ModToggleService.ChangedSinceReload.Count} mod(s) toggled. Reload Menu to fully apply.";
             NotifyPropertyChanged(nameof(ToggleStatus));
-            if (_bannerGo    != null) _bannerGo.SetActive(!string.IsNullOrEmpty(_toggleStatus) || reload);
+            bool cardUp = ConfirmVisible || ToggleConfirmVisible;   // card takes the whole area
+            if (_bannerGo    != null) _bannerGo.SetActive(!cardUp && (!string.IsNullOrEmpty(_toggleStatus) || reload));
             if (_reloadBtnGo != null) _reloadBtnGo.SetActive(reload);
         }
 
@@ -657,7 +658,7 @@ namespace ZipSaber
             DependencyWarning = req.Any()
                 ? $"Required by: {(req.Count <= 3 ? string.Join(", ", req) : string.Join(", ", req.Take(3)) + $" and {req.Count - 3} more")}"
                 : "";
-            DepWarnVisible = req.Any(); ConfirmVisible = true; ListVisible = false;
+            DepWarnVisible = req.Any(); ConfirmVisible = true; ListVisible = false; UpdateBanner();
             string body = req.Any()
                 ? $"<color=#FF8A8A><b>Required by:</b> {PromptUi.Esc(req.Count <= 4 ? string.Join(", ", req) : string.Join(", ", req.Take(4)) + $" and {req.Count - 4} more")}</color>\nThose mods may stop working."
                 : "<color=#C8C8D2>Removes the mod's DLL from your Plugins folder.</color>";
@@ -679,6 +680,7 @@ namespace ZipSaber
         {
             ConfirmVisible = false; ToggleConfirmVisible = false; ListVisible = true; AutoCancelLabel = "";
             _toggleMod = null;
+            UpdateBanner();
             NotifyPropertyChanged(nameof(ConfirmVisible));
             NotifyPropertyChanged(nameof(ToggleConfirmVisible));
             NotifyPropertyChanged(nameof(ListVisible));
