@@ -6,7 +6,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>ZipSaber</AssemblyName>
     <RootNamespace>ZipSaber</RootNamespace>
-    <Version>2.9.1</Version>
+    <Version>2.9.2</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
@@ -121,6 +121,7 @@
     <Compile Include="MiniJson.cs" />
     <Compile Include="PromptUi.cs" />
     <Compile Include="InlinePrompt.cs" />
+    <Compile Include="ModFileOps.cs" />
     <Compile Include="IconFactory.cs" />
     <Compile Include="UiKit.cs" />
     <Compile Include="ManagerSettingsViewController.cs" />

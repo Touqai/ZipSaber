@@ -72,22 +72,7 @@ namespace ZipSaber
             CleanupPendingDeletes();
         }
 
-        private void CleanupPendingDeletes()
-        {
-            try
-            {
-                string pluginsDir = System.IO.Path.GetDirectoryName(
-                    System.Reflection.Assembly.GetExecutingAssembly().Location);
-                Log.Info($"[Cleanup] Scanning: {pluginsDir}");
-                var markerFiles = System.IO.Directory.GetFiles(pluginsDir, "*.zs_del");
-                if (markerFiles.Length > 0)
-                    Log.Warn($"[Cleanup] {markerFiles.Length} marker(s) still present.");
-                string batPath = System.IO.Path.Combine(pluginsDir, "zs_cleanup.bat");
-                if (System.IO.File.Exists(batPath))
-                    try { System.IO.File.Delete(batPath); } catch { }
-            }
-            catch (Exception ex) { Log.Warn($"[Cleanup] Scan failed: {ex.Message}"); }
-        }
+        private void CleanupPendingDeletes() => ModFileOps.StartupCleanup();
 
         [OnEnable]
         public void OnEnable()
@@ -138,39 +123,7 @@ namespace ZipSaber
 
         public void LaunchPostExitCleanupPublic() => LaunchPostExitCleanup();
 
-        private void LaunchPostExitCleanup()
-        {
-            try
-            {
-                string pluginsDir = System.IO.Path.GetDirectoryName(
-                    System.Reflection.Assembly.GetExecutingAssembly().Location);
-                var markerFiles = System.IO.Directory.GetFiles(pluginsDir, "*.zs_del");
-                if (markerFiles.Length == 0) return;
-
-                int pid = System.Diagnostics.Process.GetCurrentProcess().Id;
-                string batPath = System.IO.Path.Combine(pluginsDir, "zs_cleanup.bat");
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine("@echo off");
-                sb.AppendLine(":wait");
-                sb.AppendLine($"tasklist /FI \"PID eq {pid}\" 2>nul | find \"{pid}\" >nul");
-                sb.AppendLine($"if not errorlevel 1 (timeout /t 2 /nobreak >nul & goto wait)");
-                foreach (string marker in markerFiles)
-                {
-                    string target = marker.Substring(0, marker.Length - ".zs_del".Length);
-                    sb.AppendLine($"del /f /q \"{target}\"");
-                    sb.AppendLine($"del /f /q \"{marker}\"");
-                }
-                sb.AppendLine($"del /f /q \"{batPath}\"");
-                System.IO.File.WriteAllText(batPath, sb.ToString());
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "cmd.exe", Arguments = $"/C \"{batPath}\"",
-                    UseShellExecute = false, CreateNoWindow = true
-                });
-                Log.Info($"[Cleanup] Post-exit cleanup launched for {markerFiles.Length} file(s).");
-            }
-            catch (Exception ex) { Log.Warn($"[Cleanup] LaunchPostExitCleanup failed: {ex.Message}"); }
-        }
+        private void LaunchPostExitCleanup() => ModFileOps.LaunchHelper(relaunch: false);
 
         // Fires on EVERY MainMenuInitializing (initial load + every scene reload after settings Ok).
         // Do NOT unsubscribe inside here — must keep firing on every reload.

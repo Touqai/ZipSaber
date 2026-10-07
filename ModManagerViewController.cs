@@ -247,8 +247,7 @@ namespace ZipSaber
             CommitDeletion(_selectedMod); _selectedMod = null;
             StopAutoCancel(); HideConfirm();
             ExecutePendingDeletions();
-            Plugin.Instance?.LaunchPostExitCleanupPublic();
-            RestartGame();
+            ModFileOps.Restart();
         }
 
         [UIAction("confirm-close")]
@@ -795,23 +794,8 @@ namespace ZipSaber
             foreach (var mod in toDelete) { TryMarkDelete(mod.DllPath, "DLL"); TryMarkDelete(mod.ManifestPath, "manifest"); }
         }
 
-        private static void TryMarkDelete(string path, string label)
-        {
-            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
-            try { File.WriteAllText(path + ".zs_del", "pending"); }
-            catch (Exception ex) { Plugin.Log?.Error($"[ModManager] Mark failed ({label}): {ex.Message}"); }
-        }
+        private static void TryMarkDelete(string path, string label) => ModFileOps.Remove(path, label);
 
-        private static void RestartGame()
-        {
-            try
-            {
-                string exe  = Process.GetCurrentProcess().MainModule?.FileName;
-                string args = string.Join(" ", Environment.GetCommandLineArgs().Skip(1).Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
-                Process.Start(new ProcessStartInfo(exe, args) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) });
-                Thread.Sleep(500); Application.Quit();
-            }
-            catch (Exception ex) { Plugin.Log?.Error($"[ModManager] Restart failed: {ex.Message}"); }
-        }
+        private static void RestartGame() => ModFileOps.Restart();
     }
 }

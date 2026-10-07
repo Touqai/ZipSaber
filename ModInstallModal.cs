@@ -210,19 +210,6 @@ namespace ZipSaber
             _ui.Show(false);
         }
 
-        private static void RestartGame()
-        {
-            try
-            {
-                string exe  = Process.GetCurrentProcess().MainModule?.FileName;
-                string args = string.Join(" ", Environment.GetCommandLineArgs().Skip(1)
-                                  .Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
-                Process.Start(new ProcessStartInfo(exe, args)
-                    { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) });
-                System.Threading.Thread.Sleep(500);
-                Application.Quit();
-            }
-            catch (Exception ex) { Plugin.Log?.Error($"[ModInstall] Restart failed: {ex.Message}"); }
-        }
+        private static void RestartGame() => ModFileOps.Restart();
     }
 }

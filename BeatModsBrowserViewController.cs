@@ -164,16 +164,7 @@ namespace ZipSaber
             StatusLabel = $"Downloading {mod.Name}…";
             NotifyPropertyChanged(nameof(StatusLabel));
             yield return StartCoroutine(DoInstall(mod));
-            Plugin.Instance?.LaunchPostExitCleanupPublic();
-            try
-            {
-                string exe  = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
-                string args = string.Join(" ", Environment.GetCommandLineArgs().Skip(1).Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, args) { UseShellExecute = true });
-                System.Threading.Thread.Sleep(500);
-                Application.Quit();
-            }
-            catch (Exception ex) { Plugin.Log?.Error($"[BeatMods] Restart failed: {ex.Message}"); }
+            ModFileOps.Restart();
         }
 
         // ── BeatMods API ──────────────────────────────────────────────────────────
