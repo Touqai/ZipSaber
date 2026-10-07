@@ -4,15 +4,15 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using BeatSaberMarkupLanguage;
-using BeatSaberMarkupLanguage.Attributes;
-using BeatSaberMarkupLanguage.FloatingScreen;
-using TMPro;
 using UnityEngine;
 
 namespace ZipSaber
 {
+    /// <summary>
+    /// Prompt for mod DLLs dropped onto the game window:
+    ///   1. "Install this mod?"  — nothing is copied until you confirm
+    ///   2. "Mod installed"      — restart now or later
+    /// </summary>
     internal class ModInstallModal : MonoBehaviour
     {
         // ── Singleton ────────────────────────────────────────────────────────────
@@ -31,158 +31,183 @@ namespace ZipSaber
             }
         }
 
+        internal class Candidate
+        {
+            internal string SourcePath, FileName, Id, Version, InstalledVersion;
+            internal string Label => Version != "?" ? $"{Id} v{Version}" : Id;
+        }
+
+        private enum Stage { Hidden, Confirm, Installed }
+
         // ── State ────────────────────────────────────────────────────────────────
-        private FloatingScreen _screen  = null;
-        private bool _bsmlParsed        = false;
-        private Coroutine _autoCancelCo = null;
-        private readonly List<string> _pendingModNames = new List<string>();
+        private PromptUi _ui;
+        private Stage _stage = Stage.Hidden;
+        private Coroutine _countdownCo;
+        private const float CountdownSeconds = 20f;
 
-        // Direct TMP references updated each second — bypasses BSML live-binding
-        private TextMeshProUGUI _modListTMP    = null;
-        private TextMeshProUGUI _autoCancelTMP = null;
-
-        // ── BSML initial-value properties (read once at parse) ────────────────────
-        [UIValue("mod-list-label")]
-        public string ModListLabel { get; private set; } = "";
-
-        [UIValue("auto-cancel-label")]
-        public string AutoCancelLabel { get; private set; } = "Auto closes in 20s…";
-
-        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
-
-        // ── Button actions ───────────────────────────────────────────────────────
-        [UIAction("restart-now")]
-        private void OnRestartNow()
-        {
-            Plugin.Log?.Info("[ModInstall] User chose Restart Now.");
-            StopAutoCancel();
-            HideScreen();
-            RestartGame();
-        }
-
-        [UIAction("restart-later")]
-        private void OnRestartLater()
-        {
-            Plugin.Log?.Info("[ModInstall] User chose Later.");
-            StopAutoCancel();
-            HideScreen();
-        }
+        private readonly List<Candidate> _toConfirm = new List<Candidate>();
+        private readonly List<string> _rejected = new List<string>();
+        private readonly List<string> _installed = new List<string>();
 
         // ── Public API ───────────────────────────────────────────────────────────
-        internal void ShowForMods(List<string> modNames)
+        /// <summary>Ask before installing. Safe to call from any thread.</summary>
+        internal void Confirm(List<Candidate> candidates, List<string> rejectedFiles)
         {
             MainThreadDispatcher.Enqueue(() =>
             {
-                foreach (var n in modNames)
-                    if (!_pendingModNames.Contains(n)) _pendingModNames.Add(n);
+                foreach (var c in candidates)
+                    if (!_toConfirm.Any(x => x.FileName.Equals(c.FileName, StringComparison.OrdinalIgnoreCase))) _toConfirm.Add(c);
+                foreach (var r in rejectedFiles) if (!_rejected.Contains(r)) _rejected.Add(r);
 
-                string label = BuildLabel();
-                ModListLabel  = label;
-                AutoCancelLabel = "Auto closes in 20s…";
-
-                EnsureScreen();
-                _screen.gameObject.SetActive(true);
-
-                // Update TMP components directly
-                if (_modListTMP    != null) _modListTMP.text    = label;
-                if (_autoCancelTMP != null) _autoCancelTMP.text = "Auto closes in 20s…";
-
-                StopAutoCancel();
-                _autoCancelCo = StartCoroutine(AutoCancelCountdown());
-                Plugin.Log?.Info("[ModInstall] Prompt shown.");
+                if (_toConfirm.Count == 0)
+                {
+                    if (_rejected.Count > 0)
+                        Toast.Show($"<color=#FF6B6B>Not a Beat Saber mod:</color> {PromptUi.Esc(string.Join(", ", _rejected))}");
+                    _rejected.Clear();
+                    return;
+                }
+                // If the restart prompt is up, the new drop takes over; installed list is kept for the summary
+                ShowStage(Stage.Confirm);
             });
         }
 
-        // ── Timer ─────────────────────────────────────────────────────────────────
-        private IEnumerator AutoCancelCountdown()
+        // ── Buttons ──────────────────────────────────────────────────────────────
+        private void OnPrimary()
         {
-            int secs = 20;
-            while (secs > 0)
+            if (_stage == Stage.Confirm) InstallConfirmed();
+            else if (_stage == Stage.Installed) { Plugin.Log?.Info("[ModInstall] Restart Now."); Close(); RestartGame(); }
+        }
+
+        private void OnSecondary()
+        {
+            if (_stage == Stage.Confirm) CancelConfirm("Cancelled");
+            else Close();
+        }
+
+        private void OnClose()
+        {
+            if (_stage == Stage.Confirm) CancelConfirm("Cancelled");
+            else Close();
+        }
+
+        private void InstallConfirmed()
+        {
+            string plugins = Plugin.GetPluginsPath();
+            var failed = new List<string>();
+            foreach (var c in _toConfirm)
             {
-                if (_autoCancelTMP != null)
-                    _autoCancelTMP.text = $"Auto closes in {secs}s…";
-                Plugin.Log?.Debug($"[ModInstall] Countdown: {secs}s");
-                yield return new WaitForSeconds(1f);
-                secs--;
+                try
+                {
+                    File.Copy(c.SourcePath, Path.Combine(plugins, c.FileName), overwrite: true);
+                    _installed.Add(c.Label);
+                    Plugin.Log?.Info($"[ModInstall] Installed '{c.Label}'");
+                }
+                catch (Exception ex)
+                {
+                    failed.Add(c.FileName);
+                    Plugin.Log?.Error($"[ModInstall] Copy failed '{c.FileName}': {ex.Message}");
+                }
             }
-            Plugin.Log?.Info("[ModInstall] Auto-cancel fired.");
-            if (_autoCancelTMP != null) _autoCancelTMP.text = "";
-            HideScreen();
+            _toConfirm.Clear();
+            _rejected.Clear();
+            ModRegistry.Invalidate();
+
+            if (failed.Count > 0)
+                Toast.Show($"<color=#FF6B6B>Couldn't install:</color> {PromptUi.Esc(string.Join(", ", failed))}. Is the game folder writable?");
+
+            if (_installed.Count > 0) ShowStage(Stage.Installed);
+            else Close();
         }
 
-        private void StopAutoCancel()
+        private void CancelConfirm(string why)
         {
-            if (_autoCancelCo != null) { StopCoroutine(_autoCancelCo); _autoCancelCo = null; }
-            if (_autoCancelTMP != null) _autoCancelTMP.text = "";
+            Plugin.Log?.Info($"[ModInstall] {why} - nothing installed ({_toConfirm.Count} mod(s)).");
+            _toConfirm.Clear();
+            _rejected.Clear();
+            if (_installed.Count > 0) ShowStage(Stage.Installed);   // still owe the restart prompt
+            else Close();
         }
 
-        // ── Helpers ───────────────────────────────────────────────────────────────
-        private string BuildLabel()
+        // ── Stages ───────────────────────────────────────────────────────────────
+        private void ShowStage(Stage stage)
         {
-            if (_pendingModNames.Count == 1) return _pendingModNames[0];
-            if (_pendingModNames.Count <= 3) return string.Join("\n", _pendingModNames.Select(n => $"• {n}"));
-            return string.Join("\n", _pendingModNames.Take(3).Select(n => $"• {n}"))
-                   + $"\nand {_pendingModNames.Count - 3} more…";
-        }
+            EnsureUi();
+            _stage = stage;
+            _ui.ApplyTheme();
 
-        private void FindTMPRefs()
-        {
-            if (_screen == null) return;
-            _modListTMP = null; _autoCancelTMP = null;
-            foreach (var tmp in _screen.GetComponentsInChildren<TextMeshProUGUI>(true))
+            if (stage == Stage.Confirm)
             {
-                if (tmp.text == "Auto closes in 20s…")
-                    _autoCancelTMP = tmp;
-                else if (tmp.text == ModListLabel && !string.IsNullOrEmpty(ModListLabel))
-                    _modListTMP = tmp;
+                bool many = _toConfirm.Count > 1;
+                _ui.Title.text = many ? $"Install {_toConfirm.Count} mods?" : "Install this mod?";
+                _ui.Body.text = ListText(_toConfirm.Select(DescribeCandidate).ToList())
+                    + (_rejected.Count > 0 ? $"\n<color=#FF6B6B><size=85%>Skipped (not a Beat Saber mod): {PromptUi.Esc(string.Join(", ", _rejected))}</size></color>" : "");
+                _ui.Note.text = "<color=#F2C94C>Only install mods you trust</color> - mods run code on your PC. Copied to Plugins; loads after a restart.";
+                _ui.PrimaryLabel.text = many ? "INSTALL ALL" : "INSTALL";
+                _ui.SecondaryLabel.text = "CANCEL";
             }
-            Plugin.Log?.Debug($"[ModInstall] TMP refs: modListTMP={((_modListTMP != null) ? "OK" : "null")}, cancelTMP={((_autoCancelTMP != null) ? "OK" : "null")}");
-        }
-
-        private void EnsureScreen()
-        {
-            if (_screen != null && _bsmlParsed) return;
-
-            _screen = FloatingScreen.CreateFloatingScreen(
-                new Vector2(100, 65),
-                false,
-                new Vector3(0f, 1.5f, 2.4f),
-                Quaternion.Euler(0f, 0f, 0f));
-
-            _screen.gameObject.name = "ZipSaber_ModInstallScreen";
-            DontDestroyOnLoad(_screen.gameObject);
-            _screen.gameObject.SetActive(false);
-
-            foreach (var canvas in _screen.GetComponentsInChildren<Canvas>(true))
+            else
             {
-                canvas.overrideSorting = true;
-                canvas.sortingOrder    = 32767;
+                _ui.Title.text = _installed.Count > 1 ? $"{_installed.Count} mods installed" : "Mod installed";
+                _ui.Body.text = ListText(_installed.Select(n => $"<b>{PromptUi.Esc(n)}</b>").ToList());
+                _ui.Note.text = "<color=#F2C94C>Restart required</color> - the mod won't load until Beat Saber restarts.";
+                _ui.PrimaryLabel.text = "RESTART NOW";
+                _ui.SecondaryLabel.text = "LATER";
             }
-            foreach (var canvas in _screen.GetComponentsInChildren<Canvas>(true))
-                if (canvas.GetComponent<UnityEngine.EventSystems.BaseRaycaster>() == null)
-                    canvas.gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
 
-            var blockerGo = new GameObject("ClickBlocker");
-            blockerGo.transform.SetParent(_screen.transform, false);
-            var br = blockerGo.AddComponent<RectTransform>();
-            br.anchorMin = Vector2.zero; br.anchorMax = Vector2.one;
-            br.offsetMin = new Vector2(-500, -500); br.offsetMax = new Vector2(500, 500);
-            var bi = blockerGo.AddComponent<UnityEngine.UI.Image>();
-            bi.color = Color.clear; bi.raycastTarget = true;
-            blockerGo.transform.SetAsFirstSibling();
-
-            string bsml = Utilities.GetResourceContent(
-                Assembly.GetExecutingAssembly(), "ZipSaber.mod-install-modal.bsml");
-            BSMLParser.Instance.Parse(bsml, _screen.gameObject, this);
-            _bsmlParsed = true;
-
-            FindTMPRefs();
-            Plugin.Log?.Debug("[ModInstall] FloatingScreen + BSML created.");
+            _ui.Show(true);
+            if (_countdownCo != null) StopCoroutine(_countdownCo);
+            _countdownCo = StartCoroutine(CountdownRoutine(stage));
+            Plugin.Log?.Info($"[ModInstall] Prompt: {stage}.");
         }
 
-        private void HideScreen()
+        private static string DescribeCandidate(Candidate c)
         {
-            if (_screen != null) _screen.gameObject.SetActive(false);
+            string s = $"<b>{PromptUi.Esc(c.Id)}</b> <color=#8A8A99>v{PromptUi.Esc(c.Version)}</color>";
+            if (c.InstalledVersion != null)
+                s += c.InstalledVersion == c.Version
+                    ? "  <color=#9A9AA6><size=85%>reinstall (same version)</size></color>"
+                    : $"  <color=#5FA8E8><size=85%>update from v{PromptUi.Esc(c.InstalledVersion)}</size></color>";
+            else s += "  <color=#7ED957><size=85%>new</size></color>";
+            return s;
+        }
+
+        private static string ListText(List<string> lines)
+        {
+            if (lines.Count <= 3) return string.Join("\n", lines);
+            return string.Join("\n", lines.Take(3)) + $"\n<color=#8A8A99>and {lines.Count - 3} more...</color>";
+        }
+
+        private IEnumerator CountdownRoutine(Stage stage)
+        {
+            float start = Time.unscaledTime;
+            while (true)
+            {
+                float left = CountdownSeconds - (Time.unscaledTime - start);
+                if (left <= 0f) break;
+                _ui.Countdown.text = stage == Stage.Confirm
+                    ? $"Cancels in {Mathf.CeilToInt(left)}s if you don't pick"
+                    : $"Closes in {Mathf.CeilToInt(left)}s";
+                _ui.SetTimer(left / CountdownSeconds);
+                yield return null;
+            }
+            _countdownCo = null;
+            if (stage == Stage.Confirm) CancelConfirm("Timed out");   // never installs on its own
+            else Close();
+        }
+
+        private void Close()
+        {
+            if (_countdownCo != null) { StopCoroutine(_countdownCo); _countdownCo = null; }
+            _ui?.Show(false);
+            _stage = Stage.Hidden;
+            _installed.Clear();
+        }
+
+        private void EnsureUi()
+        {
+            if (_ui != null && _ui.Screen != null) return;
+            _ui = PromptUi.Build("ZipSaber_ModInstallScreen", 100f, 62f, OnPrimary, OnSecondary, OnClose);
+            _ui.Show(false);
         }
 
         private static void RestartGame()
@@ -195,7 +220,7 @@ namespace ZipSaber
                 Process.Start(new ProcessStartInfo(exe, args)
                     { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) });
                 System.Threading.Thread.Sleep(500);
-                UnityEngine.Application.Quit();
+                Application.Quit();
             }
             catch (Exception ex) { Plugin.Log?.Error($"[ModInstall] Restart failed: {ex.Message}"); }
         }

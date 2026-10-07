@@ -331,13 +331,32 @@ namespace ZipSaber
             string targetName = wip ? "CustomWipLevels" : "CustomLevels";
             if (string.IsNullOrEmpty(targetBase)) { Log.Error($"Target path null for {targetName}."); return; }
             bool anyOK = false; int ok = 0, fail = 0;
+            var added = new List<string>(); var failed = new List<string>();
             foreach (string p in paths)
             {
-                try { if (ProcessMapZip(p, targetBase, wip)) { ok++; anyOK = true; } else fail++; }
-                catch (Exception ex) { Log.Error($"Batch Err {Path.GetFileName(p)}: {ex.Message}"); fail++; }
+                try
+                {
+                    if (ProcessMapZip(p, targetBase, wip, out string folder)) { ok++; anyOK = true; added.Add(ReadMapTitle(folder) ?? Path.GetFileNameWithoutExtension(p)); }
+                    else { fail++; failed.Add(Path.GetFileNameWithoutExtension(p)); }
+                }
+                catch (Exception ex) { Log.Error($"Batch Err {Path.GetFileName(p)}: {ex.Message}"); fail++; failed.Add(Path.GetFileNameWithoutExtension(p)); }
             }
             Log.Info($"Batch done. OK:{ok} Fail:{fail}");
             if (anyOK) RequestSongRefresh();
+
+            // Tell the player what was added, up top
+            string where = wip ? (WipFolder.UsingCustom ? "your WIP folder" : "WIP Levels") : "Custom Levels";
+            var lines = new List<string>();
+            if (added.Count == 1) lines.Add($"Added <b>{PromptUi.Esc(added[0])}</b> to {where}.");
+            else if (added.Count > 1)
+                lines.Add($"Added <b>{added.Count} maps</b> to {where}: {PromptUi.Esc(string.Join(", ", added.Take(3)))}{(added.Count > 3 ? $" +{added.Count - 3} more" : "")}");
+            if (failed.Count > 0)
+                lines.Add($"<color=#FF6B6B>Not a valid map:</color> {PromptUi.Esc(string.Join(", ", failed.Take(3)))}{(failed.Count > 3 ? $" +{failed.Count - 3} more" : "")}");
+            if (lines.Count > 0)
+            {
+                string msg = string.Join("\n", lines);
+                MainThreadDispatcher.Enqueue(() => Toast.Show(msg, 6f));
+            }
         }
         #endregion
 
@@ -345,28 +364,36 @@ namespace ZipSaber
         internal void HandleDroppedDlls(List<string> dllPaths)
         {
             if (string.IsNullOrEmpty(PluginsPath)) { Log.Error("[ModInstall] Plugins path unknown."); return; }
-            var installed = new List<string>(); int invalid = 0;
+            var candidates = new List<ModInstallModal.Candidate>();
+            var rejected = new List<string>();
             foreach (string dll in dllPaths)
             {
                 string fileName = Path.GetFileName(dll);
                 if (!ModValidator.IsBsipaPlugin(dll, out string modId, out string modVersion))
-                { Log.Warn($"[ModInstall] '{fileName}' rejected."); invalid++; continue; }
-                try
+                { Log.Warn($"[ModInstall] '{fileName}' rejected (no BSIPA manifest)."); rejected.Add(fileName); continue; }
+
+                // Already installed? (same file name in Plugins)
+                string existing = Path.Combine(PluginsPath, fileName);
+                string installedVersion = null;
+                if (File.Exists(existing) && ModValidator.IsBsipaPlugin(existing, out _, out string oldVer)) installedVersion = oldVer;
+
+                candidates.Add(new ModInstallModal.Candidate
                 {
-                    File.Copy(dll, Path.Combine(PluginsPath, fileName), overwrite: true);
-                    string label = modVersion != "?" ? $"{modId} v{modVersion}" : modId;
-                    installed.Add(label); Log.Info($"[ModInstall] Installed '{label}'");
-                }
-                catch (Exception ex) { Log.Error($"[ModInstall] Copy failed '{fileName}': {ex.Message}"); }
+                    SourcePath = dll, FileName = fileName, Id = modId, Version = modVersion, InstalledVersion = installedVersion,
+                });
             }
-            if (invalid > 0) Log.Warn($"[ModInstall] {invalid} rejected.");
-            if (installed.Any()) ModInstallModal.Instance.ShowForMods(installed);
+            // Nothing is copied until the player confirms
+            ModInstallModal.Instance.Confirm(candidates, rejected);
         }
         #endregion
 
         #region Map Processing
         internal bool ProcessMapZip(string zip, string targetBase, bool trackForDelete)
+            => ProcessMapZip(zip, targetBase, trackForDelete, out _);
+
+        internal bool ProcessMapZip(string zip, string targetBase, bool trackForDelete, out string folder)
         {
+            folder = null;
             string mapName = Path.GetFileNameWithoutExtension(zip);
             string finalDir = null; bool extOK = false, valOK = false;
             try
@@ -392,7 +419,32 @@ namespace ZipSaber
             }
             catch (Exception ex) { Log.Error($"OuterErr: {ex.Message}"); }
             finally { if (finalDir != null && Directory.Exists(finalDir) && (!extOK || !valOK)) TryDeleteDirectory(finalDir); }
+            if (extOK && valOK) folder = finalDir;
             return extOK && valOK;
+        }
+
+        /// <summary>"Song Name - Mapper" from info.dat (v2 or v4), or null.</summary>
+        private static string ReadMapTitle(string folder)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(folder)) return null;
+                string info = Directory.GetFiles(folder, "*.dat").FirstOrDefault(f => Path.GetFileName(f).Equals("info.dat", StringComparison.OrdinalIgnoreCase));
+                if (info == null) return null;
+                var d = MiniJson.Parse(File.ReadAllText(info)) as Dictionary<string, object>;
+                if (d == null) return null;
+                string title = d.GetString("_songName"), mapper = d.GetString("_levelAuthorName");
+                if (title == null)
+                {
+                    var song = d.GetObj("song");
+                    title = song.GetString("title");
+                    var authors = d.GetObj("beatmapAuthors");
+                    mapper = authors.GetList("mappers")?.OfType<string>().FirstOrDefault();
+                }
+                if (string.IsNullOrWhiteSpace(title)) return null;
+                return string.IsNullOrWhiteSpace(mapper) ? title : $"{title} - {mapper}";
+            }
+            catch { return null; }
         }
 
         private bool IsValidMapFolder(string p)
