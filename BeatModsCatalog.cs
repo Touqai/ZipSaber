@@ -29,7 +29,7 @@ namespace ZipSaber
         private static readonly List<Action<string>> _waiters = new List<Action<string>>();
         internal static bool FromCache { get; private set; }
 
-        private static string CachePath => Path.Combine(ModFileOps.GameDir, "UserData", "ZipSaber", "beatmods-cache.json");
+        private static string CachePath => Path.Combine(ModFileOps.GameDir, "UserData", "ZipSaber", "beatmods-cache-v2.json");
 
         internal static void EnsureLoaded() => Load(null);
 
@@ -47,7 +47,8 @@ namespace ZipSaber
 
             string gameVer = IPA.Utilities.UnityGame.GameVersion.ToString();
             int us = gameVer.IndexOf('_'); if (us > 0) gameVer = gameVer.Substring(0, us);
-            string url = $"{BeatModsBrowserViewController.BeatModsApi}/mod?status=approved&gameVersion={gameVer}&sort=name&sortDirection=1";
+            // BeatMods v2 API (the old /api/v1/mod endpoint now 404s)
+            string url = $"{BeatModsBrowserViewController.BeatModsApi}/mods?gameName=BeatSaber&gameVersion={gameVer}&status=verified&platform=steampc";
 
             System.Threading.ThreadPool.QueueUserWorkItem(_ =>
             {
@@ -63,11 +64,17 @@ namespace ZipSaber
                             wc.Headers[HttpRequestHeader.Accept] = "application/json";
                             json = wc.DownloadString(url);
                         }
-                        if (string.IsNullOrWhiteSpace(json) || json.TrimStart()[0] != '[') { error = "BeatMods sent an unexpected reply"; json = null; }
+                        if (string.IsNullOrWhiteSpace(json) || (json.TrimStart()[0] != '[' && json.TrimStart()[0] != '{')) { error = "BeatMods sent an unexpected reply"; json = null; }
                     }
                     catch (WebException wex)
                     {
                         var code = (wex.Response as HttpWebResponse)?.StatusCode;
+                        if (code == HttpStatusCode.BadRequest && url.Contains("&gameVersion="))
+                        {
+                            // BeatMods doesn't know this exact game version: ask for its default list instead
+                            url = System.Text.RegularExpressions.Regex.Replace(url, "&gameVersion=[^&]*", "");
+                            Plugin.Log?.Warn($"[BeatMods] Game version {gameVer} not listed on BeatMods; using its default version list.");
+                        }
                         error = code != null ? $"BeatMods replied {(int)code} {code}" : wex.Status + ": " + wex.Message;
                         Plugin.Log?.Warn($"[BeatMods] Fetch attempt {attempt} failed: {error}");
                     }
@@ -186,7 +193,7 @@ namespace ZipSaber
             });
         }
 
-        private static int InstallZip(byte[] data, ModInfo installed, out int pending)
+        internal static int InstallZip(byte[] data, ModInfo installed, out int pending)
         {
             pending = 0;
             int count = 0;
@@ -229,7 +236,7 @@ namespace ZipSaber
             }
 
             // The new build ships a differently named DLL: remove the old one so both don't load
-            if (count > 0 && !string.IsNullOrEmpty(installed.DllPath) && File.Exists(installed.DllPath)
+            if (count > 0 && installed != null && !string.IsNullOrEmpty(installed.DllPath) && File.Exists(installed.DllPath)
                 && !written.Contains(Path.GetFileName(installed.DllPath)) && pending == 0)
                 ModFileOps.Remove(installed.DllPath, "old DLL");
 

@@ -15,7 +15,8 @@ namespace ZipSaber
     [ViewDefinition("ZipSaber.beat-mods-browser.bsml")]
     internal class BeatModsBrowserViewController : BSMLAutomaticViewController
     {
-        internal const string BeatModsApi = "https://beatmods.com/api/v1";
+        internal const string BeatModsHost = "https://beatmods.com";
+        internal const string BeatModsApi = BeatModsHost + "/api";
 
         private static BeatModsBrowserViewController _instance;
         internal static BeatModsBrowserViewController Instance
@@ -543,26 +544,11 @@ namespace ZipSaber
 
             try
             {
-                string pluginsPath = Plugin.GetPluginsPath();
-                using (var ms = new System.IO.MemoryStream(data))
-                using (var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Read))
-                {
-                    int extracted = 0;
-                    foreach (var entry in zip.Entries)
-                    {
-                        if (entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) &&
-                            (entry.FullName.StartsWith("Plugins/", StringComparison.OrdinalIgnoreCase) ||
-                             entry.FullName.StartsWith("Plugins\\", StringComparison.OrdinalIgnoreCase) ||
-                             !entry.FullName.Contains("/")))
-                        {
-                            string dest = System.IO.Path.Combine(pluginsPath, System.IO.Path.GetFileName(entry.FullName));
-                            using (var fs = System.IO.File.Create(dest))
-                            using (var es = entry.Open()) es.CopyTo(fs);
-                            extracted++;
-                        }
-                    }
-                    StatusLabel = extracted > 0 ? $"Installed {mod.Name}! Restart to activate." : $"Installed {mod.Name}.";
-                }
+                // BeatMods zips mirror the game folder (Plugins/, Libs/...): install all of it
+                int extracted = BeatModsCatalog.InstallZip(data, null, out int pending);
+                StatusLabel = extracted == 0 ? $"{mod.Name}: nothing to install in that download."
+                            : pending > 0 ? $"Installed {mod.Name}! Finishes on the next launch."
+                            : $"Installed {mod.Name}! Restart to activate.";
             }
             catch (Exception ex) { StatusLabel = $"Install error: {ex.Message}"; Plugin.Log?.Error($"[BeatMods] Install: {ex.Message}"); }
 
@@ -658,12 +644,66 @@ namespace ZipSaber
         }
 
         // ── BeatMods JSON → entries ────────────────────────────────────────────────
+        private static readonly Dictionary<string, string> CategoryNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["core"] = "Core", ["essential"] = "Essential", ["library"] = "Libraries", ["cosmetic"] = "Cosmetic",
+            ["practice"] = "Practice / Training", ["gameplay"] = "Gameplay", ["streamtools"] = "Stream Tools",
+            ["ui"] = "UI Enhancements", ["lighting"] = "Lighting", ["tweaks"] = "Tweaks / Tools",
+            ["multiplayer"] = "Multiplayer", ["text"] = "Text Changes", ["editor"] = "Editor", ["other"] = "Other",
+        };
+
+        private static List<BeatModsEntry> ParseNewApi(List<object> items)
+        {
+            var result = new List<BeatModsEntry>();
+            foreach (var it in items)
+            {
+                var o = it as Dictionary<string, object>;
+                var mod = o.GetObj("mod"); var latest = o.GetObj("latest");
+                if (mod == null || latest == null) continue;
+                string name = mod.GetString("name");
+                string hash = latest.GetString("zipHash");
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(hash)) continue;
+
+                string cat = mod.GetString("category") ?? "other";
+                var authors = mod.GetList("authors");
+                string author = "";
+                if (authors != null && authors.Count > 0)
+                {
+                    var a = authors[0] as Dictionary<string, object>;
+                    author = a.GetString("displayName") ?? a.GetString("username") ?? "";
+                }
+                DateTime.TryParse(latest.GetString("updatedAt") ?? mod.GetString("updatedAt"),
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+                    out DateTime updated);
+                string desc = mod.GetString("summary");
+                if (string.IsNullOrWhiteSpace(desc)) desc = mod.GetString("description") ?? "";
+
+                result.Add(new BeatModsEntry
+                {
+                    Name        = name,
+                    Version     = latest.GetString("modVersion") ?? "?",
+                    Description = desc,
+                    DownloadUrl = $"{BeatModsHost}/cdn/mod/{hash}.zip",
+                    Category    = CategoryNames.TryGetValue(cat, out var nice) ? nice : cat,
+                    Author      = author,
+                    Updated     = updated,
+                    Required    = cat.Equals("core", StringComparison.OrdinalIgnoreCase),
+                });
+            }
+            return result;
+        }
+
         internal static List<BeatModsEntry> ParseBeatModsJson(string json)
         {
             var result = new List<BeatModsEntry>();
             try
             {
-                if (!(MiniJson.Parse(json) is List<object> mods)) return result;
+                var root = MiniJson.Parse(json);
+                // New BeatMods API (2025+): { "mods": [ { "mod": {...}, "latest": {...} } ] }
+                if (root is Dictionary<string, object> rootObj && rootObj.GetList("mods") is List<object> newMods)
+                    return ParseNewApi(newMods);
+                if (!(root is List<object> mods)) return result;
                 foreach (var o in mods)
                 {
                     if (!(o is Dictionary<string, object> m)) continue;
