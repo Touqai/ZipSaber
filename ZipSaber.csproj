@@ -14,7 +14,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <Nullable>disable</Nullable>
     <!-- Target game version. Build for another version with: dotnet build -p:GameVersion=1.44.1
-         Game references come from Libs-<version> if that folder exists, else Libs. -->
+         Each game reference comes from Libs-<version> if that file is there, else from Libs (1.40.8). -->
     <GameVersion Condition=" '$(GameVersion)' == '' ">1.40.8</GameVersion>
     <GameLibs Condition=" '$(GameLibs)' == '' and Exists('Libs-$(GameVersion)') ">Libs-$(GameVersion)</GameLibs>
     <GameLibs Condition=" '$(GameLibs)' == '' ">Libs</GameLibs>
@@ -31,65 +31,79 @@
 
     <!-- ── BSIPA ──────────────────────────────────────────────────────────── -->
     <Reference Include="IPA.Loader">
-      <HintPath>$(GameLibs)\IPA.Loader.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\IPA.Loader.dll')">$(GameLibs)\IPA.Loader.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\IPA.Loader.dll')">Libs\IPA.Loader.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
     <!-- ── Unity Engine ───────────────────────────────────────────────────── -->
     <Reference Include="UnityEngine">
-      <HintPath>$(GameLibs)\UnityEngine.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\UnityEngine.dll')">$(GameLibs)\UnityEngine.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\UnityEngine.dll')">Libs\UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(GameLibs)\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\UnityEngine.CoreModule.dll')">$(GameLibs)\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\UnityEngine.CoreModule.dll')">Libs\UnityEngine.CoreModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>$(GameLibs)\UnityEngine.UI.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\UnityEngine.UI.dll')">$(GameLibs)\UnityEngine.UI.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\UnityEngine.UI.dll')">Libs\UnityEngine.UI.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UIElementsModule">
-      <HintPath>$(GameLibs)\UnityEngine.UIElementsModule.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\UnityEngine.UIElementsModule.dll')">$(GameLibs)\UnityEngine.UIElementsModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\UnityEngine.UIElementsModule.dll')">Libs\UnityEngine.UIElementsModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UIModule">
-      <HintPath>$(GameLibs)\UnityEngine.UIModule.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\UnityEngine.UIModule.dll')">$(GameLibs)\UnityEngine.UIModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\UnityEngine.UIModule.dll')">Libs\UnityEngine.UIModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.TextRenderingModule">
-      <HintPath>$(GameLibs)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\UnityEngine.TextRenderingModule.dll')">$(GameLibs)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\UnityEngine.TextRenderingModule.dll')">Libs\UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.TextMeshPro">
-      <HintPath>$(GameLibs)\Unity.TextMeshPro.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\Unity.TextMeshPro.dll')">$(GameLibs)\Unity.TextMeshPro.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\Unity.TextMeshPro.dll')">Libs\Unity.TextMeshPro.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
     <!-- ── Beat Saber game assemblies ────────────────────────────────────── -->
     <Reference Include="HMLib">
-      <HintPath>$(GameLibs)\HMLib.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\HMLib.dll')">$(GameLibs)\HMLib.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\HMLib.dll')">Libs\HMLib.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="HMUI">
-      <HintPath>$(GameLibs)\HMUI.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\HMUI.dll')">$(GameLibs)\HMUI.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\HMUI.dll')">Libs\HMUI.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="BeatSaber.ViewSystem">
-      <HintPath>$(GameLibs)\BeatSaber.ViewSystem.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\BeatSaber.ViewSystem.dll')">$(GameLibs)\BeatSaber.ViewSystem.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\BeatSaber.ViewSystem.dll')">Libs\BeatSaber.ViewSystem.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Main">
-      <HintPath>$(GameLibs)\Main.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\Main.dll')">$(GameLibs)\Main.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\Main.dll')">Libs\Main.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
     <!-- ── Mod dependencies ───────────────────────────────────────────────── -->
     <Reference Include="SongCore">
-      <HintPath>$(GameLibs)\SongCore.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\SongCore.dll')">$(GameLibs)\SongCore.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\SongCore.dll')">Libs\SongCore.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="BeatSaberMarkupLanguage">
-      <HintPath>$(GameLibs)\BSML.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\BSML.dll')">$(GameLibs)\BSML.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\BSML.dll')">Libs\BSML.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
