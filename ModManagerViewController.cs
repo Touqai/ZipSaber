@@ -294,8 +294,8 @@ namespace ZipSaber
                 "<color=#C8C8D2><b>Restart game</b> fully reloads every mod (needed after installs, deletes and updates).\n"
                 + "<b>Reload menu</b> is instant and only re-applies mod toggles.</color>" + pending,
                 WindowHost.IsHosted
-                    ? "<color=#7ED957>The game window stays open</color><color=#9A9AA6> - a Discord screenshare keeps going through the restart.</color>"
-                    : "<color=#9A9AA6>This restart closes the game window, which ends a Discord window share.</color>",
+                    ? "<color=#7ED957>The game window stays open</color><color=#9A9AA6> - screenshares keep going through the restart.</color>"
+                    : "<color=#9A9AA6>This restart closes the game window.</color>",
                 null,
                 InlinePrompt.Btn.Primary("RESTART GAME", OnRestartGame, 1.2f),
                 InlinePrompt.Btn.Neutral("RELOAD MENU", () => { StopAutoCancel(); HideConfirm(); OnReloadMenu(); }, 1.1f),

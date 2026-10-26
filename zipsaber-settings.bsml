@@ -32,7 +32,7 @@
     <vertical bg='round-rect-panel' pad-left='3' pad-right='3' pad-top='1' pad-bottom='1' spacing='0.5' pref-width='112' child-align='UpperLeft'>
       <text id='sec-stream' text='STREAMING' font-size='2.6' bold='true' color='#5FA8E8' align='Left'/>
       <bool-setting text='Keep game window open through restarts' value='keep-window' apply-on-change='true'
-                    hover-hint='Restarts swap the game inside the same window, so a Discord screenshare of Beat Saber keeps going. Takes effect next launch.'/>
+                    hover-hint='Restarts swap the game inside the same window, so a screenshare of Beat Saber keeps going. Takes effect next launch.'/>
       <text text='~stream-status' font-size='2.5' color='#9A9AA6' align='Left' word-wrapping='true' pref-width='104' rich-text='true'/>
     </vertical>
 
