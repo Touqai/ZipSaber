@@ -179,16 +179,31 @@ namespace ZipSaber
             Card?.Set("RESTART", "Restart Beat Saber?",
                 "<color=#C8C8D2><b>Restart game</b> fully reloads every mod (needed after installs, deletes and updates).\n"
                 + "<b>Reload menu</b> is instant and only re-applies mod toggles.</color>" + pending,
-                "<color=#9A9AA6>A full restart ends a Discord window share. Reload menu keeps it, or share VR View / your screen.</color>",
+                StreamWindow.IsRunning
+                    ? "<color=#7ED957>Stream window is open</color><color=#9A9AA6> - share it on Discord and the stream stays live through the restart.</color>"
+                    : "<color=#9A9AA6>Streaming on Discord? Open the stream window first and share that - it survives restarts.</color>",
                 null,
                 InlinePrompt.Btn.Primary("RESTART GAME", OnRestartGame, 1.2f),
+                InlinePrompt.Btn.Neutral("STREAM WINDOW", () => { var err = StreamWindow.Open(); if (err != null) SetToggleStatus(err); ShowRestartCardRefresh(); }, 1.2f),
                 InlinePrompt.Btn.Neutral("RELOAD MENU", () => { StopAutoCancel(); HideConfirm(); OnReloadMenu(); }, 1.1f),
-                InlinePrompt.Btn.Neutral("CANCEL", () => { StopAutoCancel(); HideConfirm(); }, 0.7f));
+                InlinePrompt.Btn.Neutral("CANCEL", () => { StopAutoCancel(); HideConfirm(); }, 0.8f));
             ConfirmVisible = true; ListVisible = false; UpdateBanner();
             NotifyPropertyChanged(nameof(ConfirmVisible));
             NotifyPropertyChanged(nameof(ListVisible));
             StopAutoCancel();
             _autoCancelCo = StartCoroutine(AutoCancelCountdown());
+        }
+
+        private void ShowRestartCardRefresh()
+        {
+            // stream window takes a moment to appear; refresh the note shortly after
+            StartCoroutine(RefreshRestartCardSoon());
+        }
+
+        private IEnumerator RefreshRestartCardSoon()
+        {
+            yield return new WaitForSecondsRealtime(1.2f);
+            if (ConfirmVisible && _selectedMod == null && _toggleMod == null) { ConfirmVisible = false; ShowRestartCard(); }
         }
 
         private void OnRestartGame()

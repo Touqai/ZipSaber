@@ -80,6 +80,7 @@ namespace ZipSaber
             Log.Info("OnEnable called.");
             CalculatePaths();
             MainThreadDispatcher.Init();   // must be created on the main thread
+            if (Config?.AutoOpenStreamWindow == true && !StreamWindow.IsRunning) StreamWindow.Open();
 
             // Guard against duplicate subscription across OnEnable calls
             MainMenuAwaiter.MainMenuInitializing -= RegisterBSMLSettings;

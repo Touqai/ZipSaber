@@ -96,6 +96,8 @@ namespace ZipSaber
             if (_helperLaunched) return true;
             var markers = SafeMarkers();
             if (markers.Length == 0 && !relaunch) return false;
+            // Stream window open: it does the restart, so the Discord share and game audio carry over
+            if (StreamWindow.RequestRestart(relaunch, MarkerExt)) { _helperLaunched = true; return true; }
             if (LaunchPowerShellHelper(relaunch, markers.Length)) { _helperLaunched = true; return true; }
             if (LaunchBatchHelper(relaunch, markers)) { _helperLaunched = true; return true; }
             return false;

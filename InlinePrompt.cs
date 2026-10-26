@@ -99,10 +99,11 @@ namespace ZipSaber
             _note.text = note ?? "";
 
             UiKit.ClearChildren(_buttonRow);
+            float font = buttons.Length >= 4 ? 2.5f : 3f;
             foreach (var b in buttons)
             {
                 var col = b.Color == Theme.Accent ? a : b.Color;
-                var img = UiKit.Button(_buttonRow, "Btn_" + b.Label, col, -1, 9f, b.OnClick, b.Label, 3f);
+                var img = UiKit.Button(_buttonRow, "Btn_" + b.Label, col, -1, 9f, b.OnClick, b.Label, font);
                 var le = img.GetComponent<LayoutElement>();
                 le.flexibleWidth = b.Weight; le.minWidth = 10f; le.preferredWidth = -1;
             }

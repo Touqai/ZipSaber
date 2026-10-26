@@ -6,7 +6,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>ZipSaber</AssemblyName>
     <RootNamespace>ZipSaber</RootNamespace>
-    <Version>2.10.0</Version>
+    <Version>2.11.0</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
@@ -122,6 +122,7 @@
     <Compile Include="PromptUi.cs" />
     <Compile Include="InlinePrompt.cs" />
     <Compile Include="ModFileOps.cs" />
+    <Compile Include="StreamWindow.cs" />
     <Compile Include="IconFactory.cs" />
     <Compile Include="UiKit.cs" />
     <Compile Include="ManagerSettingsViewController.cs" />
@@ -149,4 +150,12 @@
     <Message Text="Copied $(AssemblyName).dll to $(BeatSaberPluginsDir)" Importance="High" />
   </Target>
 
+  <!-- ZipSaber Stream companion window: built first, embedded into ZipSaber.dll -->
+  <Target Name="BuildStreamWindow" BeforeTargets="BeforeBuild">
+    <MSBuild Projects="ZipSaberStream\ZipSaberStream.csproj" Targets="Restore" Properties="Configuration=Release;_StreamRestore=1" />
+    <MSBuild Projects="ZipSaberStream\ZipSaberStream.csproj" Targets="Build" Properties="Configuration=Release" />
+  </Target>
+  <ItemGroup>
+    <EmbeddedResource Include="ZipSaberStream\bin\Release\ZipSaberStream.exe" LogicalName="ZipSaber.ZipSaberStream.exe" />
+  </ItemGroup>
 </Project>
