@@ -42,10 +42,10 @@ namespace ZipSaber
         {
             bool on = Plugin.Config?.KeepWindowOnRestart ?? true;
             _streamStatus = WindowHost.IsHosted
-                ? (on ? "<color=#7ED957>Active.</color> Restarts happen inside this window, so Discord keeps sharing it."
+                ? (on ? "<color=#7ED957>Active.</color> Restarts happen inside this window, so screenshares keep going."
                       : "Active until the next launch.")
-                : on ? "Turns on next time the game starts. Start your Discord share after that."
-                     : "Off - a restart closes the game window, which ends a Discord window share.";
+                : on ? "Turns on next time the game starts."
+                     : "Off - a restart closes the game window.";
             NotifyPropertyChanged(nameof(StreamStatus));
         }
 
