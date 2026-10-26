@@ -15,7 +15,8 @@ namespace ZipSaber
     [ViewDefinition("ZipSaber.beat-mods-browser.bsml")]
     internal class BeatModsBrowserViewController : BSMLAutomaticViewController
     {
-        private const string BeatModsApi = "https://beatmods.com/api/v1";
+        internal const string BeatModsHost = "https://beatmods.com";
+        internal const string BeatModsApi = BeatModsHost + "/api";
 
         private static BeatModsBrowserViewController _instance;
         internal static BeatModsBrowserViewController Instance
@@ -40,7 +41,12 @@ namespace ZipSaber
         public string StatusLabel { get; private set; } = "Loading…";
 
         [UIValue("search-text")]
-        public string SearchText { get => _searchText; set { _searchText = value; ApplyFilter(); } }
+        public string SearchText { get => _searchText; set { _searchText = value; _scrollToTop = true; ApplyFilter(); } }
+
+        [UIObject("confirm-host")] private GameObject _confirmHost = null;
+        [UIObject("back-slot")]    private GameObject _backSlot = null;
+        private InlinePrompt _card;
+        private InlinePrompt Card => _card ?? (_confirmHost != null ? (_card = InlinePrompt.Build(_confirmHost)) : null);
 
         [UIValue("confirm-visible")]
         public bool ConfirmVisible { get; private set; } = false;
@@ -63,21 +69,68 @@ namespace ZipSaber
         [UIObject("mod-list-container")]
         private GameObject _containerGo = null;
 
+        // ── Sorting ───────────────────────────────────────────────────────────────
+        internal const string SortNameAsc      = "Name (A-Z)";
+        internal const string SortNameDesc     = "Name (Z-A)";
+        internal const string SortNotInstalled = "Not installed first";
+        internal const string SortInstalled    = "Installed first";
+        internal const string SortCategory     = "Category";
+        internal const string SortUpdated      = "Recently updated";
+
+        [UIValue("sort-options")]
+        private List<object> SortOptions => new List<object>
+            { SortNameAsc, SortNameDesc, SortNotInstalled, SortInstalled, SortCategory, SortUpdated };
+
+        [UIValue("sort-mode")]
+        public string SortMode
+        {
+            get
+            {
+                string v = Plugin.Config?.BrowseSortMode;
+                return SortOptions.Contains(v) ? v : SortNameAsc;
+            }
+            set { if (Plugin.Config != null) Plugin.Config.BrowseSortMode = value; }
+        }
+
+        [UIAction("sort-changed")]
+        private void OnSortChanged(object val)
+        {
+            if (Plugin.Config != null) Plugin.Config.BrowseSortMode = val as string ?? SortNameAsc;
+            _scrollToTop = true;
+            BuildRows();
+        }
+
+        private bool _scrollToTop = true;
+
         // ── Lifecycle ─────────────────────────────────────────────────────────────
         [UIAction("#post-parse")]
         private void OnPostParse()
         {
             Plugin.Log?.Info("[BeatMods] #post-parse.");
+            ViewportClickGuard.Attach(_containerGo);
             StartCoroutine(FetchMods());
         }
 
+        [UIComponent("zs-tag")] private TextMeshProUGUI _zsTag = null;
+
+        [UIAction("go-back")]
+        private void OnGoBack() => ModManagerFlowCoordinator.GoBack();
+
         protected override void DidActivate(bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling)
         {
+            if (firstActivation) FlatView.Prepare(this);   // before BSML builds the view
             base.DidActivate(firstActivation, addedToHierarchy, screenSystemEnabling);
+            if (firstActivation)
+            {
+                FlatView.Finish(this);
+                UiKit.SlotButton(_backSlot, "BackBtn", UiKit.Neutral, OnGoBack, "<", 4f);
+            }
+            if (_zsTag != null) _zsTag.color = Theme.Accent;
             if (!firstActivation && _allMods.Count == 0)
                 StartCoroutine(FetchMods());
             UpdateFooter();
         }
+
 
         [UIAction("search-changed")]
         private void OnSearchChanged(string val) { _searchText = val ?? ""; ApplyFilter(); }
@@ -112,16 +165,7 @@ namespace ZipSaber
             StatusLabel = $"Downloading {mod.Name}…";
             NotifyPropertyChanged(nameof(StatusLabel));
             yield return StartCoroutine(DoInstall(mod));
-            Plugin.Instance?.LaunchPostExitCleanupPublic();
-            try
-            {
-                string exe  = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
-                string args = string.Join(" ", Environment.GetCommandLineArgs().Skip(1).Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, args) { UseShellExecute = true });
-                System.Threading.Thread.Sleep(500);
-                Application.Quit();
-            }
-            catch (Exception ex) { Plugin.Log?.Error($"[BeatMods] Restart failed: {ex.Message}"); }
+            ModFileOps.Restart();
         }
 
         // ── BeatMods API ──────────────────────────────────────────────────────────
@@ -129,34 +173,22 @@ namespace ZipSaber
         {
             StatusLabel = "Fetching from BeatMods…";
             NotifyPropertyChanged(nameof(StatusLabel));
+            bool done = false; string error = null;
+            BeatModsCatalog.Load(err => { error = err; done = true; }, force: _allMods.Count == 0 && BeatModsCatalog.FromCache);
+            yield return new WaitUntil(() => done);
+            if (this == null) yield break;
 
-            string gameVer = IPA.Utilities.UnityGame.GameVersion.ToString();
-            int underscore = gameVer.IndexOf('_');
-            if (underscore > 0) gameVer = gameVer.Substring(0, underscore);
-
-            string url  = $"{BeatModsApi}/mod?status=approved&gameVersion={gameVer}&sort=name&sortDirection=1";
-            string json = null;
-            yield return FetchUrl(url, r => json = r);
-
-            if (string.IsNullOrEmpty(json))
+            if (error != null && !BeatModsCatalog.Loaded)
             {
-                StatusLabel = "Failed to load. Check connection.";
+                StatusLabel = $"Couldn't reach BeatMods ({error}).";
                 NotifyPropertyChanged(nameof(StatusLabel));
                 yield break;
             }
 
-            var parsed = ParseBeatModsJson(json);
-            var deduped = parsed
-                .GroupBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.OrderByDescending(m => m.Version).First())
-                .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            _allMods = deduped;
-            StatusLabel = $"{_allMods.Count} mods";
+            _allMods = BeatModsCatalog.Mods.ToList();
+            StatusLabel = BeatModsCatalog.FromCache ? $"{_allMods.Count} mods (offline copy)" : $"{_allMods.Count} mods";
             NotifyPropertyChanged(nameof(StatusLabel));
 
-            // Cache URL map so pending installs can download on close
             DownloadUrlsByName.Clear();
             foreach (var m in _allMods)
                 DownloadUrlsByName[m.Name] = m.DownloadUrl;
@@ -200,67 +232,245 @@ namespace ZipSaber
                 StringComparer.OrdinalIgnoreCase);
             var pendingInstalls = new HashSet<string>(
                 ModManagerViewController.PendingInstalls, StringComparer.OrdinalIgnoreCase);
+            _installedMods = installedMods;
 
-            foreach (var mod in _filtered)
-                BuildRow(container, mod, installedIds.Contains(mod.Name), pendingInstalls.Contains(mod.Name));
+            var rows = _filtered.Select(m => new BRow
+            {
+                Mod = m,
+                Installed = installedIds.Contains(m.Name),
+                Queued = pendingInstalls.Contains(m.Name),
+            }).ToList();
 
-            Plugin.Log?.Info($"[BeatMods] Rendered {_filtered.Count} rows.");
+            var cmp = StringComparer.OrdinalIgnoreCase;
+            string mode = SortMode;
+
+            switch (mode)
+            {
+                case SortNameDesc:
+                    rows = rows.OrderByDescending(r => r.Mod.Name, cmp).ToList(); break;
+                case SortUpdated:
+                    rows = rows.OrderByDescending(r => r.Mod.Updated).ThenBy(r => r.Mod.Name, cmp).ToList(); break;
+                case SortNotInstalled:
+                case SortInstalled:
+                {
+                    bool installedFirst = mode == SortInstalled;
+                    var avail = rows.Where(r => !r.Installed && !r.Queued).OrderBy(r => r.Mod.Name, cmp).ToList();
+                    var queued = rows.Where(r => r.Queued && !r.Installed).OrderBy(r => r.Mod.Name, cmp).ToList();
+                    var inst = rows.Where(r => r.Installed).OrderBy(r => r.Mod.Name, cmp).ToList();
+                    var order = installedFirst
+                        ? new[] { ("INSTALLED", inst), ("QUEUED", queued), ("NOT INSTALLED", avail) }
+                        : new[] { ("NOT INSTALLED", avail), ("QUEUED", queued), ("INSTALLED", inst) };
+                    BuildGrouped(container, order.ToList());
+                    goto Done;
+                }
+                case SortCategory:
+                {
+                    var byCat = rows.GroupBy(r => r.Mod.Category ?? "Other", cmp)
+                        .OrderBy(g => g.Key.Equals("Other", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+                        .ThenBy(g => g.Key, cmp)
+                        .Select(g => (g.Key.ToUpperInvariant(), g.OrderBy(r => r.Mod.Name, cmp).ToList()))
+                        .ToList();
+                    BuildGrouped(container, byCat);
+                    goto Done;
+                }
+                default:
+                    rows = rows.OrderBy(r => r.Mod.Name, cmp).ToList(); break;
+            }
+
+            foreach (var r in rows) BuildRow(container, r.Mod, r.Installed, r.Queued);
+
+        Done:
+            if (rows.Count == 0) BuildGroupHeader(container, "NO MODS MATCH YOUR SEARCH", -1);
+            Plugin.Log?.Debug($"[BeatMods] Rendered {rows.Count} rows ({mode}).");
+            ScrollFix.Refresh(this, _containerGo, _scrollToTop);
+            _scrollToTop = false;
+        }
+
+        private List<ModInfo> _installedMods = new List<ModInfo>();
+
+        private ModInfo InstalledFor(BeatModsEntry e)
+            => _installedMods.FirstOrDefault(m => BeatModsCatalog.Find(m) == e)
+               ?? _installedMods.FirstOrDefault(m => string.Equals(m.Name, e.Name, StringComparison.OrdinalIgnoreCase)
+                                                  || string.Equals(m.Id, e.Name, StringComparison.OrdinalIgnoreCase));
+
+        private ModInfo _updMod;
+        private BeatModsEntry _updEntry;
+
+        private void ShowUpdateConfirm(ModInfo mod, BeatModsEntry entry)
+        {
+            _updMod = mod; _updEntry = entry; _pendingInstall = null;
+            string desc = string.IsNullOrWhiteSpace(entry.Description) ? "" : entry.Description.Replace("\r", "").Replace("\n", " ").Trim();
+            if (desc.Length > 150) desc = desc.Substring(0, 147).TrimEnd() + "...";
+            Card?.Set("UPDATE MOD", $"{mod.DisplayLabel}  v{mod.Version}  >  v{entry.Version}",
+                $"<color=#C8C8D2>{PromptUi.Esc(desc)}</color>",
+                "<color=#9A9AA6>The new version loads after a restart.</color>", null,
+                InlinePrompt.Btn.Primary("UPDATE & RESTART", () => RunUpdate(true), 1.3f),
+                InlinePrompt.Btn.Neutral("UPDATE NOW", () => RunUpdate(false), 1.1f),
+                InlinePrompt.Btn.Neutral("CANCEL", () => { _updMod = null; StopAutoCancel(); HideConfirm(); }, 0.8f));
+            ConfirmVisible = true; ListVisible = false;
+            NotifyPropertyChanged(nameof(ConfirmVisible));
+            NotifyPropertyChanged(nameof(ListVisible));
+            StopAutoCancel();
+            _autoCancelCo = StartCoroutine(AutoCancelCountdown());
+        }
+
+        private void RunUpdate(bool restartAfter)
+        {
+            var mod = _updMod; var entry = _updEntry;
+            _updMod = null; _updEntry = null;
+            StopAutoCancel(); HideConfirm();
+            if (mod == null || entry == null) return;
+            StatusLabel = $"Updating {entry.Name}...";
+            NotifyPropertyChanged(nameof(StatusLabel));
+            BeatModsCatalog.Update(mod, entry, (ok, msg) =>
+            {
+                if (this == null) return;
+                StatusLabel = msg;
+                NotifyPropertyChanged(nameof(StatusLabel));
+                ApplyFilter();
+                if (ok && restartAfter) ModFileOps.Restart();
+            });
+            ApplyFilter();
+        }
+
+        private class BRow
+        {
+            internal BeatModsEntry Mod;
+            internal bool Installed, Queued;
+        }
+
+        private void BuildGrouped(Transform container, List<(string title, List<BRow> items)> groups)
+        {
+            foreach (var (title, items) in groups)
+            {
+                if (items.Count == 0) continue;
+                BuildGroupHeader(container, title, items.Count);
+                foreach (var r in items) BuildRow(container, r.Mod, r.Installed, r.Queued);
+            }
+        }
+
+        private void BuildGroupHeader(Transform parent, string title, int count)
+        {
+            var tmp = UiKit.Text(parent, "Header_" + title, count >= 0 ? $"{title}  <color=#666677>{count}</color>" : title,
+                                 2.8f, Theme.AccentShade(0.9f, 1f), TextAlignmentOptions.BottomLeft);
+            tmp.fontStyle = FontStyles.Bold; tmp.characterSpacing = 4;
+            tmp.margin = new Vector4(2, 0, 0, 0.5f);
+            var le = UiKit.Size(tmp.gameObject, -1, 5);
+            le.flexibleWidth = 1;
         }
 
         private void BuildRow(Transform parent, BeatModsEntry mod, bool installed, bool queued)
         {
             var rowGo = new GameObject($"BRow_{mod.Name}");
             rowGo.transform.SetParent(parent, false);
-
-            var rowRect = rowGo.GetComponent<RectTransform>() ?? rowGo.AddComponent<RectTransform>();
-            rowRect.sizeDelta = new Vector2(0, 10);
+            rowGo.AddComponent<RectTransform>();
 
             var bgImg = rowGo.AddComponent<Image>();
-            bgImg.sprite        = GetNoGlowSprite();
-            bgImg.material      = GetNoGlowMaterial();
-            bgImg.type          = Image.Type.Sliced;
-            bgImg.color         = installed ? new Color(0.05f, 0.25f, 0.05f, 0.75f)
-                                : queued    ? new Color(0.05f, 0.12f, 0.3f,  0.75f)
-                                :             new Color(0.1f,  0.1f,  0.15f, 0.75f);
-            bgImg.raycastTarget = true;
+            bgImg.sprite = GetNoGlowSprite(); bgImg.material = GetNoGlowMaterial(); bgImg.type = Image.Type.Sliced;
+            Color normalCol = new Color(0.10f, 0.10f, 0.14f, 0.70f);
+            Color hoverCol  = new Color(0.17f, 0.17f, 0.23f, 0.88f);
+            bgImg.color = normalCol; bgImg.raycastTarget = true;
 
             var layout = rowGo.AddComponent<HorizontalLayoutGroup>();
-            layout.spacing = 4;
-            typeof(HorizontalLayoutGroup).GetProperty("childAlignment")?.SetValue(layout, 3);
-            layout.childForceExpandWidth  = false;
-            layout.childForceExpandHeight = false;
-            layout.padding = new RectOffset(8, 6, 1, 1);
-            rowGo.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            layout.spacing = 2;
+            layout.childAlignment = TextAnchor.MiddleLeft;
+            layout.childForceExpandWidth = false; layout.childForceExpandHeight = false;
+            layout.childControlWidth = true; layout.childControlHeight = true;
+            layout.padding = new RectOffset(0, 2, 1, 1);
+            var rowLE = rowGo.AddComponent<LayoutElement>();
+            rowLE.preferredHeight = 7.5f; rowLE.minHeight = 7.5f;
 
-            Color hoverCol  = installed ? new Color(0.07f, 0.35f, 0.07f, 0.9f)
-                            : queued    ? new Color(0.07f, 0.18f, 0.42f, 0.9f)
-                            :             new Color(0.18f, 0.18f, 0.25f, 0.9f);
-            Color normalCol = bgImg.color;
+            // Hover: highlight + show what the mod does in the description panel
             var trigger = rowGo.AddComponent<UnityEngine.EventSystems.EventTrigger>();
-            AddHover(trigger, () => bgImg.color = hoverCol, () => bgImg.color = normalCol);
+            AddHover(trigger,
+                () => { bgImg.color = hoverCol; ShowDescription(mod, installed, queued); },
+                () => { bgImg.color = normalCol; });
 
-            string nameColor = installed ? "#88CC88" : queued ? "#8888FF" : "#DDDDDD";
-            string tag       = installed ? " <color=#555555>[installed]</color>"
-                             : queued    ? " <color=#555555>[pending install]</color>" : "";
+            // Accent bar: green installed, blue queued, grey available
+            Color accent = installed ? new Color(0.25f, 0.80f, 0.45f, 1f)
+                         : queued    ? new Color(0.35f, 0.55f, 1.00f, 1f)
+                         :             new Color(0.40f, 0.40f, 0.48f, 1f);
+            var barGo = new GameObject("Accent");
+            barGo.transform.SetParent(rowGo.transform, false);
+            var barLE = barGo.AddComponent<LayoutElement>();
+            barLE.preferredWidth = 0.8f; barLE.minWidth = 0.8f; barLE.preferredHeight = 5.5f;
+            var barImg = barGo.AddComponent<Image>();
+            barImg.sprite = GetNoGlowSprite(); barImg.material = GetNoGlowMaterial(); barImg.type = Image.Type.Sliced;
+            barImg.color = accent; barImg.raycastTarget = false;
+
+            var installedInfo = installed ? InstalledFor(mod) : null;
+            var update = installedInfo != null ? BeatModsCatalog.FindUpdate(installedInfo) : null;
+            bool updating = installedInfo != null && BeatModsCatalog.Updating.Contains(installedInfo.Id);
+            bool updated = installedInfo != null && BeatModsCatalog.UpdatedThisSession.Contains(installedInfo.Id);
+            string tag = updating ? $"  <color={Theme.AccentHex}><size=80%>UPDATING...</size></color>"
+                       : updated  ? "  <color=#6688AA><size=80%>UPDATED - RESTART TO LOAD</size></color>"
+                       : update != null ? $"  <color={Theme.AccentHex}><size=80%>UPDATE FROM v{Esc(installedInfo.Version)}</size></color>"
+                       : installed ? "  <color=#55AA77><size=80%>INSTALLED</size></color>"
+                       : queued    ? "  <color=#6688DD><size=80%>QUEUED</size></color>" : "";
             var labelGo = new GameObject("Label");
             labelGo.transform.SetParent(rowGo.transform, false);
             var lLE = labelGo.AddComponent<LayoutElement>();
-            lLE.flexibleWidth = 1; lLE.preferredHeight = 8;
+            lLE.flexibleWidth = 1; lLE.preferredHeight = 5.5f; lLE.minWidth = 10;
             var lTMP = labelGo.AddComponent<TextMeshProUGUI>();
-            lTMP.text             = $"<color={nameColor}>{mod.Name}</color>  <color=#777777>v{mod.Version}</color>{tag}";
-            lTMP.fontSize         = 3.5f;
-            lTMP.enableWordWrapping = false;
-            lTMP.richText         = true;
+            lTMP.text = $"<color=#E6E6EA>{Esc(mod.Name)}</color>  <color=#5E5E68><size=75%>v{Esc(mod.Version)}</size></color>{tag}";
+            lTMP.fontSize = 3.3f; lTMP.enableWordWrapping = false; lTMP.overflowMode = TextOverflowModes.Ellipsis;
+            lTMP.alignment = TextAlignmentOptions.Left; lTMP.richText = true; lTMP.raycastTarget = false;
+            lTMP.margin = new Vector4(1.5f, 0, 0, 0);
             lTMP.fontSharedMaterial = GetNoGlowTMPMaterial(lTMP);
 
             if (!installed && !queued)
-                BuildButton(rowGo.transform, "Install", new Color(0.08f, 0.25f, 0.6f, 1f), () => ShowInstallConfirm(mod), 22);
+                BuildButton(rowGo.transform, "INSTALL", new Color(0.10f, 0.30f, 0.60f, 1f), () => ShowInstallConfirm(mod), 16);
+            else if (update != null && !updating)
+                BuildButton(rowGo.transform, "UPDATE", Theme.AccentShade(0.75f, 1f), () => ShowUpdateConfirm(installedInfo, update), 16);
+            else
+            {
+                var sp = new GameObject("Spacer");
+                sp.transform.SetParent(rowGo.transform, false);
+                var spLE = sp.AddComponent<LayoutElement>();
+                spLE.preferredWidth = 16; spLE.minWidth = 16; spLE.preferredHeight = 5.5f;
+            }
         }
+
+        // ── Description panel ─────────────────────────────────────────────────────
+        private const string DescPlaceholder = "<color=#666677>Hover over a mod to see what it does.</color>";
+        private static string _descText = DescPlaceholder;
+
+        [UIValue("desc-text")]
+        public string DescText => _descText;
+
+        private void ShowDescription(BeatModsEntry mod, bool installed, bool queued)
+        {
+            string desc = string.IsNullOrWhiteSpace(mod.Description) ? "No description provided." : mod.Description.Trim();
+            desc = desc.Replace("\\r", "").Replace("\\n", " ").Replace("\r", "").Replace("\n", " ");
+            if (desc.Length > 260) desc = desc.Substring(0, 257).TrimEnd() + "…";
+            string status = installed ? "  <color=#55AA77><size=80%>INSTALLED</size></color>"
+                          : queued    ? "  <color=#6688DD><size=80%>QUEUED</size></color>" : "";
+            var meta = new List<string> { mod.Category };
+            if (!string.IsNullOrEmpty(mod.Author)) meta.Add("by " + mod.Author);
+            if (mod.Updated > DateTime.MinValue) meta.Add("updated " + mod.Updated.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture));
+            string metaLine = $"  <color=#6E6E80><size=80%>{Esc(string.Join("  ·  ", meta))}</size></color>";
+            _descText = $"<b>{Esc(mod.Name)}</b> <color=#777788><size=80%>v{Esc(mod.Version)}</size></color>{status}{metaLine}\n<color=#C8C8D2>{Esc(desc)}</color>";
+            NotifyPropertyChanged(nameof(DescText));
+        }
+
+        // Keep mod-supplied text from injecting TMP rich-text tags
+        private static string Esc(string s) => "<noparse>" + (s ?? "").Replace("</noparse>", "") + "</noparse>";
 
         private void ShowInstallConfirm(BeatModsEntry mod)
         {
             _pendingInstall = mod;
             ConfirmTitle    = $"Install  {mod.Name}  v{mod.Version}?";
+            var meta = new List<string>();
+            if (!string.IsNullOrEmpty(mod.Category)) meta.Add(mod.Category);
+            if (!string.IsNullOrEmpty(mod.Author)) meta.Add("by " + mod.Author);
+            string desc = string.IsNullOrWhiteSpace(mod.Description) ? "" : mod.Description.Replace("\r", "").Replace("\n", " ").Replace("\n", " ").Trim();
+            if (desc.Length > 150) desc = desc.Substring(0, 147).TrimEnd() + "...";
+            Card?.Set("INSTALL FROM BEATMODS", $"{mod.Name}  v{mod.Version}",
+                $"<color=#8A8A99><size=90%>{PromptUi.Esc(string.Join("  ·  ", meta))}</size></color>\n<color=#C8C8D2>{PromptUi.Esc(desc)}</color>",
+                "<color=#F2C94C>Only install mods you trust</color><color=#9A9AA6> - mods run code on your PC. New mods load after a restart.</color>", null,
+                InlinePrompt.Btn.Primary("RESTART & INSTALL", OnInstallRestart, 1.3f),
+                InlinePrompt.Btn.Neutral("INSTALL ON CLOSE", OnInstallClose, 1.2f),
+                InlinePrompt.Btn.Neutral("CANCEL", OnInstallCancel, 0.7f));
             ConfirmVisible  = true;
             ListVisible     = false;
             NotifyPropertyChanged(nameof(ConfirmTitle));
@@ -282,13 +492,15 @@ namespace ZipSaber
 
         private IEnumerator AutoCancelCountdown()
         {
-            _autoCancelSec = 20;
-            while (_autoCancelSec > 0)
+            const float total = 20f;
+            float start = Time.unscaledTime;
+            while (true)
             {
-                AutoCancelLabel = $"Auto-cancelling in {_autoCancelSec}s…";
-                NotifyPropertyChanged(nameof(AutoCancelLabel));
-                yield return new WaitForSeconds(1f);
-                _autoCancelSec--;
+                float left = total - (Time.unscaledTime - start);
+                if (left <= 0f) break;
+                _autoCancelSec = Mathf.CeilToInt(left);
+                _card?.SetTimer(left / total, $"Cancels in {_autoCancelSec}s if you don't pick");
+                yield return null;
             }
             _pendingInstall = null; HideConfirm();
         }
@@ -332,26 +544,11 @@ namespace ZipSaber
 
             try
             {
-                string pluginsPath = Plugin.GetPluginsPath();
-                using (var ms = new System.IO.MemoryStream(data))
-                using (var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Read))
-                {
-                    int extracted = 0;
-                    foreach (var entry in zip.Entries)
-                    {
-                        if (entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) &&
-                            (entry.FullName.StartsWith("Plugins/", StringComparison.OrdinalIgnoreCase) ||
-                             entry.FullName.StartsWith("Plugins\\", StringComparison.OrdinalIgnoreCase) ||
-                             !entry.FullName.Contains("/")))
-                        {
-                            string dest = System.IO.Path.Combine(pluginsPath, System.IO.Path.GetFileName(entry.FullName));
-                            using (var fs = System.IO.File.Create(dest))
-                            using (var es = entry.Open()) es.CopyTo(fs);
-                            extracted++;
-                        }
-                    }
-                    StatusLabel = extracted > 0 ? $"Installed {mod.Name}! Restart to activate." : $"Installed {mod.Name}.";
-                }
+                // BeatMods zips mirror the game folder (Plugins/, Libs/...): install all of it
+                int extracted = BeatModsCatalog.InstallZip(data, null, out int pending);
+                StatusLabel = extracted == 0 ? $"{mod.Name}: nothing to install in that download."
+                            : pending > 0 ? $"Installed {mod.Name}! Finishes on the next launch."
+                            : $"Installed {mod.Name}! Restart to activate.";
             }
             catch (Exception ex) { StatusLabel = $"Install error: {ex.Message}"; Plugin.Log?.Error($"[BeatMods] Install: {ex.Message}"); }
 
@@ -366,7 +563,7 @@ namespace ZipSaber
             var btnGo = new GameObject("Btn_" + label);
             btnGo.transform.SetParent(parent, false);
             var le = btnGo.AddComponent<LayoutElement>();
-            le.preferredWidth = width; le.preferredHeight = 8;
+            le.preferredWidth = width; le.minWidth = width; le.preferredHeight = 5.5f;
 
             var bgImg = btnGo.AddComponent<Image>();
             bgImg.sprite   = GetNoGlowSprite();
@@ -375,7 +572,7 @@ namespace ZipSaber
             bgImg.color    = color;
 
             var trigger = btnGo.AddComponent<UnityEngine.EventSystems.EventTrigger>();
-            Color hov = new Color(Mathf.Min(color.r * 1.3f, 1f), Mathf.Min(color.g * 1.3f, 1f), Mathf.Min(color.b * 1.3f, 1f), 1f);
+            Color hov = new Color(Mathf.Min(color.r * 1.35f + 0.04f, 1f), Mathf.Min(color.g * 1.35f + 0.04f, 1f), Mathf.Min(color.b * 1.35f + 0.04f, 1f), 1f);
             AddHover(trigger, () => bgImg.color = hov, () => bgImg.color = color);
 
             var lblGo = new GameObject("Lbl");
@@ -385,7 +582,9 @@ namespace ZipSaber
             lr.offsetMin = Vector2.zero; lr.offsetMax = Vector2.zero;
             var lTMP = lblGo.AddComponent<TextMeshProUGUI>();
             lTMP.text      = label;
-            lTMP.fontSize  = 3f;
+            lTMP.fontSize  = 2.6f;
+            lTMP.fontStyle = FontStyles.Bold;
+            lTMP.characterSpacing = 2;
             lTMP.alignment = TextAlignmentOptions.Center;
             lTMP.color     = Color.white;
             lTMP.raycastTarget = false;
@@ -444,44 +643,115 @@ namespace ZipSaber
             return mat;
         }
 
-        // ── Minimal JSON parser ───────────────────────────────────────────────────
-        private static List<BeatModsEntry> ParseBeatModsJson(string json)
+        // ── BeatMods JSON → entries ────────────────────────────────────────────────
+        private static readonly Dictionary<string, string> CategoryNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["core"] = "Core", ["essential"] = "Essential", ["library"] = "Libraries", ["cosmetic"] = "Cosmetic",
+            ["practice"] = "Practice / Training", ["gameplay"] = "Gameplay", ["streamtools"] = "Stream Tools",
+            ["ui"] = "UI Enhancements", ["lighting"] = "Lighting", ["tweaks"] = "Tweaks / Tools",
+            ["multiplayer"] = "Multiplayer", ["text"] = "Text Changes", ["editor"] = "Editor", ["other"] = "Other",
+        };
+
+        private static List<BeatModsEntry> ParseNewApi(List<object> items)
+        {
+            var result = new List<BeatModsEntry>();
+            foreach (var it in items)
+            {
+                var o = it as Dictionary<string, object>;
+                var mod = o.GetObj("mod"); var latest = o.GetObj("latest");
+                if (mod == null || latest == null) continue;
+                string name = mod.GetString("name");
+                string hash = latest.GetString("zipHash");
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(hash)) continue;
+
+                string cat = mod.GetString("category") ?? "other";
+                var authors = mod.GetList("authors");
+                string author = "";
+                if (authors != null && authors.Count > 0)
+                {
+                    var a = authors[0] as Dictionary<string, object>;
+                    author = a.GetString("displayName") ?? a.GetString("username") ?? "";
+                }
+                DateTime.TryParse(latest.GetString("updatedAt") ?? mod.GetString("updatedAt"),
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+                    out DateTime updated);
+                string desc = mod.GetString("summary");
+                if (string.IsNullOrWhiteSpace(desc)) desc = mod.GetString("description") ?? "";
+
+                result.Add(new BeatModsEntry
+                {
+                    Name        = name,
+                    Version     = latest.GetString("modVersion") ?? "?",
+                    Description = desc,
+                    DownloadUrl = $"{BeatModsHost}/cdn/mod/{hash}.zip",
+                    Category    = CategoryNames.TryGetValue(cat, out var nice) ? nice : cat,
+                    Author      = author,
+                    Updated     = updated,
+                    Required    = cat.Equals("core", StringComparison.OrdinalIgnoreCase),
+                });
+            }
+            return result;
+        }
+
+        internal static List<BeatModsEntry> ParseBeatModsJson(string json)
         {
             var result = new List<BeatModsEntry>();
             try
             {
-                int i = 0;
-                while (i < json.Length)
+                var root = MiniJson.Parse(json);
+                // New BeatMods API (2025+): { "mods": [ { "mod": {...}, "latest": {...} } ] }
+                if (root is Dictionary<string, object> rootObj && rootObj.GetList("mods") is List<object> newMods)
+                    return ParseNewApi(newMods);
+                if (!(root is List<object> mods)) return result;
+                foreach (var o in mods)
                 {
-                    int nameIdx = json.IndexOf("\"name\"", i, StringComparison.Ordinal);
-                    if (nameIdx < 0) break;
-                    string name    = ExtractStr(json, nameIdx);
-                    int verIdx     = json.IndexOf("\"version\"",     nameIdx, StringComparison.Ordinal);
-                    int descIdx    = json.IndexOf("\"description\"", nameIdx, StringComparison.Ordinal);
-                    int dlIdx      = json.IndexOf("\"downloads\"",   nameIdx, StringComparison.Ordinal);
-                    string version = verIdx  >= 0 ? ExtractStr(json, verIdx)  : "?";
-                    string desc    = descIdx >= 0 ? ExtractStr(json, descIdx) : "";
-                    string dlUrl   = "";
-                    if (dlIdx >= 0)
+                    if (!(o is Dictionary<string, object> m)) continue;
+                    string name = m.GetString("name");
+                    if (string.IsNullOrEmpty(name)) continue;
+
+                    string dlUrl = null;
+                    var downloads = m.GetList("downloads");
+                    if (downloads != null)
+                        foreach (var d in downloads)
+                        {
+                            var dd = d as Dictionary<string, object>;
+                            string type = dd.GetString("type");
+                            string u = dd.GetString("url");
+                            if (string.IsNullOrEmpty(u)) continue;
+                            // prefer universal/steam builds over oculus
+                            if (dlUrl == null || type == "universal" || type == "steam") dlUrl = u;
+                        }
+                    if (string.IsNullOrEmpty(dlUrl)) continue;
+                    if (!dlUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)) dlUrl = "https://beatmods.com" + dlUrl;
+
+                    DateTime.TryParse(m.GetString("updatedDate") ?? m.GetString("uploadDate"),
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+                        out DateTime updated);
+
+                    result.Add(new BeatModsEntry
                     {
-                        int urlIdx = json.IndexOf("\"url\"", dlIdx, StringComparison.Ordinal);
-                        if (urlIdx >= 0) dlUrl = "https://beatmods.com" + ExtractStr(json, urlIdx);
-                    }
-                    if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(dlUrl))
-                        result.Add(new BeatModsEntry { Name = name, Version = version, Description = desc, DownloadUrl = dlUrl });
-                    i = nameIdx + 6;
+                        Name        = name,
+                        Version     = m.GetString("version") ?? "?",
+                        Description = m.GetString("description") ?? "",
+                        DownloadUrl = dlUrl,
+                        Category    = string.IsNullOrWhiteSpace(m.GetString("category")) ? "Other" : m.GetString("category").Trim(),
+                        Author      = m.GetObj("author").GetString("username") ?? "",
+                        Updated     = updated,
+                        Required    = m.GetBool("required"),
+                    });
                 }
             }
             catch (Exception ex) { Plugin.Log?.Error($"[BeatMods] JSON parse: {ex.Message}"); }
             return result;
         }
 
-        private static string ExtractStr(string json, int keyIdx)
+        internal static Version SafeVersion(string v)
         {
-            int colon = json.IndexOf(':', keyIdx); if (colon < 0) return "";
-            int q1    = json.IndexOf('"', colon + 1); if (q1 < 0) return "";
-            int q2    = json.IndexOf('"', q1 + 1);    if (q2 < 0) return "";
-            return json.Substring(q1 + 1, q2 - q1 - 1);
+            if (string.IsNullOrEmpty(v)) return new Version(0, 0);
+            string core = v.Split('-', '+')[0];
+            return Version.TryParse(core, out var ver) ? ver : new Version(0, 0);
         }
 
         internal class BeatModsEntry
@@ -490,6 +760,10 @@ namespace ZipSaber
             public string Version     { get; set; }
             public string Description { get; set; }
             public string DownloadUrl { get; set; }
+            public string Category    { get; set; } = "Other";
+            public string Author      { get; set; } = "";
+            public DateTime Updated   { get; set; }
+            public bool Required      { get; set; }
         }
     }
 }

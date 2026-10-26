@@ -11,6 +11,8 @@ namespace ZipSaber
         // Always create fresh via BeatSaberUI when needed.
         private ModManagerViewController      _modManagerVC;
         private BeatModsBrowserViewController _browserVC;
+        private ManagerSettingsViewController _settingsVC;
+        private GambleViewController          _gambleVC;
 
         // The flow coordinator itself can be static since FlowCoordinators
         // survive scene transitions (they live on DontDestroyOnLoad objects).
@@ -29,6 +31,28 @@ namespace ZipSaber
                 animationDirection: ViewController.AnimationDirection.Horizontal);
         }
 
+        internal static void PresentSettings()
+        {
+            if (_instance == null) return;
+            if (_instance._settingsVC == null)
+                _instance._settingsVC = BeatSaberUI.CreateViewController<ManagerSettingsViewController>();
+            _instance.SetTitle(null);
+            _instance.ReplaceTopViewController(_instance._settingsVC,
+                animationType: ViewController.AnimationType.In,
+                animationDirection: ViewController.AnimationDirection.Vertical);
+        }
+
+        internal static void PresentGamble()
+        {
+            if (_instance == null) return;
+            if (_instance._gambleVC == null)
+                _instance._gambleVC = BeatSaberUI.CreateViewController<GambleViewController>();
+            _instance.SetTitle(null);
+            _instance.ReplaceTopViewController(_instance._gambleVC,
+                animationType: ViewController.AnimationType.In,
+                animationDirection: ViewController.AnimationDirection.Vertical);
+        }
+
         internal static void PresentBrowser()
         {
             if (_instance == null) return;
@@ -40,7 +64,7 @@ namespace ZipSaber
             // Always create fresh — previous instance may be destroyed
             if (_browserVC == null)
                 _browserVC = BeatSaberUI.CreateViewController<BeatModsBrowserViewController>();
-            SetTitle("Browse BeatMods");
+            SetTitle(null); // ZipSaber draws its own flat header + back button
             ReplaceTopViewController(_browserVC,
                 animationType: ViewController.AnimationType.In,
                 animationDirection: ViewController.AnimationDirection.Horizontal);
@@ -50,7 +74,7 @@ namespace ZipSaber
         {
             if (_modManagerVC == null)
                 _modManagerVC = BeatSaberUI.CreateViewController<ModManagerViewController>();
-            SetTitle("ZipSaber - Mod Manager");
+            SetTitle(null);
             ReplaceTopViewController(_modManagerVC,
                 animationType: ViewController.AnimationType.In,
                 animationDirection: ViewController.AnimationDirection.Horizontal);
@@ -62,8 +86,9 @@ namespace ZipSaber
             {
                 if (firstActivation)
                 {
-                    SetTitle("ZipSaber - Mod Manager");
-                    showBackButton = true;
+                    // No game title bar: the views have their own flat header with a back button
+                    SetTitle(null);
+                    showBackButton = false;
                     if (_modManagerVC == null)
                         _modManagerVC = BeatSaberUI.CreateViewController<ModManagerViewController>();
                     ProvideInitialViewControllers(_modManagerVC);
@@ -75,9 +100,21 @@ namespace ZipSaber
             }
         }
 
+        protected override void DidDeactivate(bool removedFromHierarchy, bool screenSystemDisabling)
+        {
+            base.DidDeactivate(removedFromHierarchy, screenSystemDisabling);
+        }
+
+        /// <summary>Called by the in-view back buttons.</summary>
+        internal static void GoBack()
+        {
+            if (_instance == null) return;
+            _instance.BackButtonWasPressed(_instance.topViewController);
+        }
+
         protected override void BackButtonWasPressed(ViewController topViewController)
         {
-            if (topViewController == _browserVC)
+            if (topViewController == _browserVC || topViewController == _settingsVC || topViewController == _gambleVC)
                 ShowModManager();
             else
             {

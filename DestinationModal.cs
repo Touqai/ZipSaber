@@ -35,12 +35,17 @@ namespace ZipSaber
         private PendingBatch _current;
         private bool _showing    = false;
         private FloatingScreen _screen    = null;
-        private bool _bsmlParsed = false;
         private Coroutine _autoCancelCo   = null;
 
-        // Direct TMP references — set after BSML parse, updated directly (bypasses BSML binding)
+        // Code-built UI (flat, matches the Mod Manager)
         private TextMeshProUGUI _mapNameTMP    = null;
         private TextMeshProUGUI _autoCancelTMP = null;
+        private TextMeshProUGUI _wipSubTMP     = null;
+        private UnityEngine.UI.Image _timerFill = null;
+        private UnityEngine.UI.Image _accentBar, _tagBorder;
+        private TextMeshProUGUI _tagTMP;
+        private float _countdownStart;
+        private const float CountdownSeconds = 20f;
 
         private struct PendingBatch
         {
@@ -48,18 +53,7 @@ namespace ZipSaber
             public string DisplayLabel;
         }
 
-        // ── BSML initial-value properties (read once at parse time) ───────────────
-        [UIValue("map-name-label")]
-        public string MapNameLabel { get; private set; } = "";
-
-        [UIValue("auto-cancel-label")]
-        public string AutoCancelLabel { get; private set; } = "Auto closes in 20s…";
-
-        // Required by BSML even if we don't use it for live updates
-        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
-
         // ── Button actions ───────────────────────────────────────────────────────
-        [UIAction("destination-wip")]
         private void OnChooseWip()
         {
             Plugin.Log?.Info("[Modal] User chose CustomWipLevels.");
@@ -70,7 +64,6 @@ namespace ZipSaber
             StartCoroutine(DelayedAdvance());
         }
 
-        [UIAction("destination-custom")]
         private void OnChooseCustom()
         {
             Plugin.Log?.Info("[Modal] User chose CustomLevels.");
@@ -81,7 +74,6 @@ namespace ZipSaber
             StartCoroutine(DelayedAdvance());
         }
 
-        [UIAction("destination-cancel")]
         private void OnCancel()
         {
             Plugin.Log?.Info("[Modal] User dismissed — map not imported.");
@@ -120,9 +112,7 @@ namespace ZipSaber
                 EnsureScreen();
                 _screen.gameObject.SetActive(true);
 
-                // Update TMP components directly — reliable regardless of BSML binding
-                if (_mapNameTMP    != null) _mapNameTMP.text    = _current.DisplayLabel;
-                if (_autoCancelTMP != null) _autoCancelTMP.text = "Auto closes in 20s…";
+                RefreshContent();
 
                 StopAutoCancel();
                 _autoCancelCo = StartCoroutine(AutoCancelCountdown());
@@ -138,17 +128,16 @@ namespace ZipSaber
 
         private IEnumerator AutoCancelCountdown()
         {
-            int secs = 20;
-            while (secs > 0)
+            _countdownStart = Time.unscaledTime;
+            while (true)
             {
-                if (_autoCancelTMP != null)
-                    _autoCancelTMP.text = $"Auto closes in {secs}s…";
-                Plugin.Log?.Debug($"[Modal] Countdown: {secs}s");
-                yield return new WaitForSeconds(1f);
-                secs--;
+                float left = CountdownSeconds - (Time.unscaledTime - _countdownStart);
+                if (left <= 0f) break;
+                if (_autoCancelTMP != null) _autoCancelTMP.text = $"Closes in {Mathf.CeilToInt(left)}s if you don't pick";
+                if (_timerFill != null) _timerFill.rectTransform.anchorMax = new Vector2(Mathf.Clamp01(left / CountdownSeconds), 1f);
+                yield return null;
             }
             Plugin.Log?.Info("[Modal] Auto-cancel fired — dismissing without action.");
-            if (_autoCancelTMP != null) _autoCancelTMP.text = "";
             _current = default;
             HideScreen();
             StartCoroutine(DelayedAdvance());
@@ -157,44 +146,47 @@ namespace ZipSaber
         private void StopAutoCancel()
         {
             if (_autoCancelCo != null) { StopCoroutine(_autoCancelCo); _autoCancelCo = null; }
-            if (_autoCancelTMP != null) _autoCancelTMP.text = "";
         }
 
-        // ── BSML post-parse: grab TMP references ──────────────────────────────────
-        [UIAction("#post-parse")]
-        private void OnPostParse()
+        // ── UI ────────────────────────────────────────────────────────────────────
+        private void RefreshContent()
         {
-            // Walk all TMP components on the screen and identify by their initial text
-            // (set from UIValue at parse time)
-            if (_screen == null) return;
-            foreach (var tmp in _screen.GetComponentsInChildren<TextMeshProUGUI>(true))
+            int count = _current.ZipPaths?.Count ?? 0;
+            if (_mapNameTMP != null)
+                _mapNameTMP.text = (count > 1 ? $"<color=#9A9AA6>{count} maps</color>\n" : "") + Esc(_current.DisplayLabel);
+
+            if (_wipSubTMP != null)
             {
-                if (tmp.text == "" || tmp.text == _current.DisplayLabel || tmp.text == MapNameLabel)
-                {
-                    // Try to identify by GameObject name set in BSML
-                    if (tmp.gameObject.name.Contains("map-name") ||
-                        tmp.transform.parent?.gameObject.name.Contains("map-name") == true)
-                        _mapNameTMP = tmp;
-                    else if (tmp.gameObject.name.Contains("auto-cancel") ||
-                             tmp.transform.parent?.gameObject.name.Contains("auto-cancel") == true)
-                        _autoCancelTMP = tmp;
-                }
-                else if (tmp.text == "Auto closes in 20s…")
-                    _autoCancelTMP = tmp;
+                string folder = WipFolder.UsingCustom ? Shorten(WipFolder.Current) : "CustomWipLevels";
+                bool del = Plugin.Config?.DeleteOnClose ?? false;
+                _wipSubTMP.text = $"{Esc(folder)}\n" + (del
+                    ? "<color=#F2C94C>Deleted when the game closes</color>"
+                    : "<color=#7E7E8C>Kept after closing</color>");
             }
-            Plugin.Log?.Debug($"[Modal] Post-parse: mapTMP={((_mapNameTMP != null) ? "OK" : "null")}, cancelTMP={((_autoCancelTMP != null) ? "OK" : "null")}");
+
+            var a = Theme.Accent;
+            if (_accentBar != null) _accentBar.color = a;
+            if (_tagTMP != null) _tagTMP.color = a;
+            if (_tagBorder != null) _tagBorder.color = new Color(a.r, a.g, a.b, 0.35f);
+            if (_timerFill != null) _timerFill.color = a;
+            if (_autoCancelTMP != null) _autoCancelTMP.text = $"Closes in {Mathf.CeilToInt(CountdownSeconds)}s if you don't pick";
+        }
+
+        private static string Esc(string s) => "<noparse>" + (s ?? "").Replace("</noparse>", "") + "</noparse>";
+
+        private static string Shorten(string path)
+        {
+            if (string.IsNullOrEmpty(path) || path.Length <= 42) return path;
+            return "..." + path.Substring(path.Length - 39);
         }
 
         private void EnsureScreen()
         {
-            if (_screen != null && _bsmlParsed) return;
+            if (_screen != null) return;
 
-            _screen = FloatingScreen.CreateFloatingScreen(
-                new Vector2(100, 65),
-                false,
-                new Vector3(0f, 1.5f, 2.4f),
-                Quaternion.Euler(0f, 0f, 0f));
-
+            const float W = 100f, H = 62f;
+            _screen = FloatingScreen.CreateFloatingScreen(new Vector2(W, H), false,
+                new Vector3(0f, 1.5f, 2.4f), Quaternion.identity, 0f, false);   // flat
             _screen.gameObject.name = "ZipSaber_PromptScreen";
             DontDestroyOnLoad(_screen.gameObject);
 
@@ -207,42 +199,91 @@ namespace ZipSaber
                 if (canvas.GetComponent<UnityEngine.EventSystems.BaseRaycaster>() == null)
                     canvas.gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
 
-            var blockerGo = new GameObject("ClickBlocker");
-            blockerGo.transform.SetParent(_screen.transform, false);
-            var br = blockerGo.AddComponent<RectTransform>();
-            br.anchorMin = Vector2.zero; br.anchorMax = Vector2.one;
-            br.offsetMin = new Vector2(-500, -500); br.offsetMax = new Vector2(500, 500);
-            var bi = blockerGo.AddComponent<UnityEngine.UI.Image>();
-            bi.color = Color.clear; bi.raycastTarget = true;
-            blockerGo.transform.SetAsFirstSibling();
+            var root = _screen.transform;
 
-            // Set initial values before parse so BSML reads them correctly
-            MapNameLabel    = _current.DisplayLabel;
-            AutoCancelLabel = "Auto closes in 20s…";
+            // Swallow clicks around the prompt so you don't hit the menu behind it
+            var blocker = UiKit.Img(root, "ClickBlocker", UiKit.RoundSprite, Color.clear);
+            blocker.raycastTarget = true;
+            blocker.rectTransform.anchorMin = Vector2.zero; blocker.rectTransform.anchorMax = Vector2.one;
+            blocker.rectTransform.offsetMin = new Vector2(-500, -500); blocker.rectTransform.offsetMax = new Vector2(500, 500);
 
-            string bsml = Utilities.GetResourceContent(
-                Assembly.GetExecutingAssembly(), "ZipSaber.destination-modal.bsml");
-            BSMLParser.Instance.Parse(bsml, _screen.gameObject, this);
-            _bsmlParsed = true;
+            // Panel
+            _tagBorder = UiKit.Img(root, "Border", UiKit.RoundSprite, Color.white, sliced: true);
+            UiKit.Stretch(_tagBorder.rectTransform, -0.4f);
+            var panel = UiKit.Img(root, "Panel", UiKit.RoundSprite, new Color(0.06f, 0.06f, 0.09f, 0.98f), sliced: true);
+            UiKit.Stretch(panel.rectTransform);
+            panel.raycastTarget = true;
+            var p = panel.transform;
 
-            // After parse: find TMP refs by their current text content
-            FindTMPRefs();
+            // Header: accent bar, ZIPSABER tag, title, close button
+            _accentBar = UiKit.Img(p, "AccentBar", UiKit.RoundSprite, Theme.Accent, sliced: true);
+            Place(_accentBar.rectTransform, 3f, H - 4f, 0.9f, 9f);
 
-            Plugin.Log?.Debug("[Modal] FloatingScreen + BSML created.");
+            _tagTMP = UiKit.Text(p, "Tag", "ZIPSABER", 2.4f, Theme.Accent, TextAlignmentOptions.BottomLeft);
+            _tagTMP.fontStyle = FontStyles.Bold;
+            Place(_tagTMP.rectTransform, 6f, H - 4f, 60f, 3.5f);
+
+            var title = UiKit.Text(p, "Title", "Where should this map go?", 4.6f, Color.white, TextAlignmentOptions.TopLeft);
+            title.fontStyle = FontStyles.Bold;
+            Place(title.rectTransform, 6f, H - 7.5f, 76f, 6f);
+
+            var close = UiKit.Button(p, "Close", new Color(0.16f, 0.16f, 0.21f, 0.95f), 8, 8, OnCancel, "X", 3.6f);
+            Place(close.rectTransform, W - 12f, H - 4f, 8f, 8f);
+
+            // Map name(s)
+            _mapNameTMP = UiKit.Text(p, "MapName", "", 3f, new Color(0.85f, 0.85f, 0.9f), TextAlignmentOptions.TopLeft);
+            _mapNameTMP.enableWordWrapping = true;
+            _mapNameTMP.fontStyle = FontStyles.Italic;
+            _mapNameTMP.overflowMode = TextOverflowModes.Ellipsis;
+            Place(_mapNameTMP.rectTransform, 6f, H - 16f, W - 12f, 10f);
+
+            // Choice cards
+            const float cardW = 42f, cardH = 20f, cardTop = 32f;
+            var wip = Card(p, "WipCard", 6f, cardTop, cardW, cardH, "WIP LEVELS", out _wipSubTMP, OnChooseWip);
+            Card(p, "CustomCard", W - 6f - cardW, cardTop, cardW, cardH, "CUSTOM LEVELS", out var customSub, OnChooseCustom);
+            customSub.text = "CustomLevels\n<color=#7E7E8C>Kept permanently</color>";
+
+            // Countdown text + bar
+            _autoCancelTMP = UiKit.Text(p, "Countdown", "", 2.5f, new Color(0.55f, 0.55f, 0.62f), TextAlignmentOptions.BottomLeft);
+            Place(_autoCancelTMP.rectTransform, 6f, 9f, 70f, 4f);
+
+            var track = UiKit.Img(p, "TimerTrack", UiKit.RoundSprite, new Color(1f, 1f, 1f, 0.08f), sliced: true);
+            Place(track.rectTransform, 6f, 4.5f, W - 12f, 1.2f);
+            _timerFill = UiKit.Img(track.transform, "Fill", UiKit.RoundSprite, Theme.Accent, sliced: true);
+            var fr = _timerFill.rectTransform;
+            fr.anchorMin = Vector2.zero; fr.anchorMax = Vector2.one; fr.offsetMin = fr.offsetMax = Vector2.zero;
+
+            Plugin.Log?.Debug("[Modal] Prompt screen built.");
         }
 
-        private void FindTMPRefs()
+        /// <summary>A big clickable choice: bold title + two-line subtitle.</summary>
+        private static UnityEngine.UI.Image Card(Transform parent, string name, float x, float top, float w, float h,
+                                                 string title, out TextMeshProUGUI sub, Action onClick)
         {
-            if (_screen == null) return;
-            _mapNameTMP = null; _autoCancelTMP = null;
-            foreach (var tmp in _screen.GetComponentsInChildren<TextMeshProUGUI>(true))
-            {
-                if (tmp.text == "Auto closes in 20s…")
-                    _autoCancelTMP = tmp;
-                else if (tmp.text == MapNameLabel && !string.IsNullOrEmpty(MapNameLabel))
-                    _mapNameTMP = tmp;
-            }
-            Plugin.Log?.Debug($"[Modal] TMP refs: mapTMP={((_mapNameTMP != null) ? "OK" : "null")}, cancelTMP={((_autoCancelTMP != null) ? "OK" : "null")}");
+            var bg = UiKit.Button(parent, name, new Color(0.13f, 0.13f, 0.18f, 1f), w, h, onClick);
+            Place(bg.rectTransform, x, top, w, h);
+
+            var t = UiKit.Text(bg.transform, "Title", title, 3.6f, Color.white, TextAlignmentOptions.TopLeft);
+            t.fontStyle = FontStyles.Bold; t.characterSpacing = 3;
+            var tr = t.rectTransform;
+            tr.anchorMin = new Vector2(0, 1); tr.anchorMax = new Vector2(1, 1);
+            tr.offsetMin = new Vector2(3f, -8f); tr.offsetMax = new Vector2(-3f, -2.5f);
+
+            sub = UiKit.Text(bg.transform, "Sub", "", 2.5f, new Color(0.72f, 0.72f, 0.78f), TextAlignmentOptions.TopLeft);
+            sub.enableWordWrapping = true;
+            var sr = sub.rectTransform;
+            sr.anchorMin = Vector2.zero; sr.anchorMax = Vector2.one;
+            sr.offsetMin = new Vector2(3f, 2f); sr.offsetMax = new Vector2(-3f, -9f);
+            return bg;
+        }
+
+        /// <summary>Position by top-left corner in panel units (origin bottom-left).</summary>
+        private static void Place(RectTransform rt, float x, float top, float w, float h)
+        {
+            rt.anchorMin = rt.anchorMax = Vector2.zero;
+            rt.pivot = new Vector2(0f, 1f);
+            rt.sizeDelta = new Vector2(w, h);
+            rt.anchoredPosition = new Vector2(x, top);
         }
 
         private void HideScreen()

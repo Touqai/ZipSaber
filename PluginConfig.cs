@@ -19,12 +19,32 @@ namespace ZipSaber
         /// <summary>Show a prompt asking whether to put dropped maps in CustomWipLevels or CustomLevels.</summary>
         public virtual bool ShowDestinationPrompt { get; set; } = true;
 
+        /// <summary>Mod Manager sort order (one of the ModManagerViewController.Sort* labels).</summary>
+        public virtual string ModSortMode { get; set; } = "Name (A-Z)";
+
+        /// <summary>Mod Manager accent colour as #RRGGBB.</summary>
+        /// <summary>Browse BeatMods sort order.</summary>
+        public virtual string BrowseSortMode { get; set; } = "Name (A-Z)";
+
+        public virtual string AccentColor { get; set; } = "#5FA8E8";
+
+        /// <summary>Custom folder for dropped WIP maps. Empty = Beat Saber_Data/CustomWipLevels.</summary>
+        public virtual string CustomWipPath { get; set; } = "";
+
+        /// <summary>Keep the game window open through ZipSaber restarts (Discord screenshare keeps going).</summary>
+        public virtual bool KeepWindowOnRestart { get; set; } = true;
+
         public virtual void OnReload() { }
         public virtual void Changed() { }
         public virtual void CopyFrom(PluginConfig other)
         {
             DeleteOnClose = other.DeleteOnClose;
             ShowDestinationPrompt = other.ShowDestinationPrompt;
+            ModSortMode = other.ModSortMode;
+            AccentColor = other.AccentColor;
+            BrowseSortMode = other.BrowseSortMode;
+            CustomWipPath = other.CustomWipPath;
+            KeepWindowOnRestart = other.KeepWindowOnRestart;
         }
     }
 }

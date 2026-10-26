@@ -21,6 +21,9 @@ namespace ZipSaber
             lock (_lock) { _actions.Enqueue(action); }
         }
 
+        /// <summary>Create the dispatcher. Call from the main thread (Plugin.OnEnable).</summary>
+        internal static void Init() => EnsureExists();
+
         private static void EnsureExists()
         {
             if (_instance != null) return;
@@ -35,6 +38,7 @@ namespace ZipSaber
 
         private void Update()
         {
+            try { WindowHost.Tick(); } catch { }
             while (true)
             {
                 Action action;

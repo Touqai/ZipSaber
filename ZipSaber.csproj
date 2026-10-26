@@ -6,13 +6,18 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>ZipSaber</AssemblyName>
     <RootNamespace>ZipSaber</RootNamespace>
-    <Version>1.5.1</Version>
+    <Version>2.13.6</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <OutputPath>bin\$(Configuration)\</OutputPath>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <Nullable>disable</Nullable>
+    <!-- Target game version. Build for another version with: dotnet build -p:GameVersion=1.44.1
+         Each game reference comes from Libs-<version> if that file is there, else from Libs (1.40.8). -->
+    <GameVersion Condition=" '$(GameVersion)' == '' ">1.40.8</GameVersion>
+    <GameLibs Condition=" '$(GameLibs)' == '' and Exists('Libs-$(GameVersion)') ">Libs-$(GameVersion)</GameLibs>
+    <GameLibs Condition=" '$(GameLibs)' == '' ">Libs</GameLibs>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -26,61 +31,79 @@
 
     <!-- ── BSIPA ──────────────────────────────────────────────────────────── -->
     <Reference Include="IPA.Loader">
-      <HintPath>Libs\IPA.Loader.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\IPA.Loader.dll')">$(GameLibs)\IPA.Loader.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\IPA.Loader.dll')">Libs\IPA.Loader.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
     <!-- ── Unity Engine ───────────────────────────────────────────────────── -->
     <Reference Include="UnityEngine">
-      <HintPath>Libs\UnityEngine.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\UnityEngine.dll')">$(GameLibs)\UnityEngine.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\UnityEngine.dll')">Libs\UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>Libs\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\UnityEngine.CoreModule.dll')">$(GameLibs)\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\UnityEngine.CoreModule.dll')">Libs\UnityEngine.CoreModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>Libs\UnityEngine.UI.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\UnityEngine.UI.dll')">$(GameLibs)\UnityEngine.UI.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\UnityEngine.UI.dll')">Libs\UnityEngine.UI.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UIElementsModule">
-      <HintPath>Libs\UnityEngine.UIElementsModule.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\UnityEngine.UIElementsModule.dll')">$(GameLibs)\UnityEngine.UIElementsModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\UnityEngine.UIElementsModule.dll')">Libs\UnityEngine.UIElementsModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UIModule">
-      <HintPath>Libs\UnityEngine.UIModule.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\UnityEngine.UIModule.dll')">$(GameLibs)\UnityEngine.UIModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\UnityEngine.UIModule.dll')">Libs\UnityEngine.UIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath Condition="Exists('$(GameLibs)\UnityEngine.TextRenderingModule.dll')">$(GameLibs)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\UnityEngine.TextRenderingModule.dll')">Libs\UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.TextMeshPro">
-      <HintPath>Libs\Unity.TextMeshPro.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\Unity.TextMeshPro.dll')">$(GameLibs)\Unity.TextMeshPro.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\Unity.TextMeshPro.dll')">Libs\Unity.TextMeshPro.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
     <!-- ── Beat Saber game assemblies ────────────────────────────────────── -->
     <Reference Include="HMLib">
-      <HintPath>Libs\HMLib.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\HMLib.dll')">$(GameLibs)\HMLib.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\HMLib.dll')">Libs\HMLib.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="HMUI">
-      <HintPath>Libs\HMUI.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\HMUI.dll')">$(GameLibs)\HMUI.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\HMUI.dll')">Libs\HMUI.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="BeatSaber.ViewSystem">
-      <HintPath>Libs\BeatSaber.ViewSystem.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\BeatSaber.ViewSystem.dll')">$(GameLibs)\BeatSaber.ViewSystem.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\BeatSaber.ViewSystem.dll')">Libs\BeatSaber.ViewSystem.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Main">
-      <HintPath>Libs\Main.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\Main.dll')">$(GameLibs)\Main.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\Main.dll')">Libs\Main.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
     <!-- ── Mod dependencies ───────────────────────────────────────────────── -->
     <Reference Include="SongCore">
-      <HintPath>Libs\SongCore.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\SongCore.dll')">$(GameLibs)\SongCore.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\SongCore.dll')">Libs\SongCore.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="BeatSaberMarkupLanguage">
-      <HintPath>Libs\BSML.dll</HintPath>
+      <HintPath Condition="Exists('$(GameLibs)\BSML.dll')">$(GameLibs)\BSML.dll</HintPath>
+      <HintPath Condition="!Exists('$(GameLibs)\BSML.dll')">Libs\BSML.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
@@ -100,32 +123,69 @@
     <!-- ── Source files ───────────────────────────────────────────────────── -->
     <Compile Include="Plugin.cs" />
     <Compile Include="PluginConfig.cs" />
-    <Compile Include="SettingsViewController.cs" />
     <Compile Include="DestinationModal.cs" />
     <Compile Include="MainThreadDispatcher.cs" />
     <Compile Include="ModInstallModal.cs" />
     <Compile Include="ModValidator.cs" />
     <Compile Include="ModInfo.cs" />
     <Compile Include="ModRegistry.cs" />
+    <Compile Include="ModToggleService.cs" />
+    <Compile Include="ModDetacher.cs" />
+    <Compile Include="FlatView.cs" />
+    <Compile Include="ViewportClickGuard.cs" />
+    <Compile Include="Theme.cs" />
+    <Compile Include="WipFolder.cs" />
+    <Compile Include="Clipboard.cs" />
+    <Compile Include="ScrollFix.cs" />
+    <Compile Include="MiniJson.cs" />
+    <Compile Include="PromptUi.cs" />
+    <Compile Include="InlinePrompt.cs" />
+    <Compile Include="ModFileOps.cs" />
+    <Compile Include="WindowHost.cs" />
+    <Compile Include="BeatModsCatalog.cs" />
+    <Compile Include="IconFactory.cs" />
+    <Compile Include="UiKit.cs" />
+    <Compile Include="ManagerSettingsViewController.cs" />
+    <Compile Include="SlotAudio.cs" />
+    <Compile Include="GambleViewController.cs" />
+    <Compile Include="SlotEffects.cs" />
+    <Compile Include="CustomAssetInstaller.cs" />
     <Compile Include="ModManagerViewController.cs" />
     <Compile Include="ModManagerFlowCoordinator.cs" />
     <Compile Include="BeatModsBrowserViewController.cs" />
 
     <!-- ── Embedded resources ─────────────────────────────────────────────── -->
-    <EmbeddedResource Include="manifest.json" />
-    <EmbeddedResource Include="settings.bsml" />
-    <EmbeddedResource Include="destination-modal.bsml" />
-    <EmbeddedResource Include="mod-install-modal.bsml" />
+    <EmbeddedResource Include="$(IntermediateOutputPath)manifest.json" LogicalName="ZipSaber.manifest.json" />
     <EmbeddedResource Include="mod-manager.bsml" />
     <EmbeddedResource Include="beat-mods-browser.bsml" />
+    <EmbeddedResource Include="zipsaber-settings.bsml" />
+    <EmbeddedResource Include="gamble.bsml" />
 
   </ItemGroup>
 
   <!-- Copy built DLL to Beat Saber Plugins folder after build -->
-  <Target Name="CopyFilesOnBuild" AfterTargets="Build">
+  <Target Name="CopyFilesOnBuild" AfterTargets="Build" Condition="Exists('$(BeatSaberPluginsDir)')">
     <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll"
           DestinationFolder="$(BeatSaberPluginsDir)" />
     <Message Text="Copied $(AssemblyName).dll to $(BeatSaberPluginsDir)" Importance="High" />
   </Target>
 
+  <!-- ZipSaber Stream companion window: built first, embedded into ZipSaber.dll -->
+  <Target Name="BuildStreamWindow" BeforeTargets="BeforeBuild">
+    <MSBuild Projects="ZipSaberWindow\ZipSaberWindow.csproj" Targets="Restore" Properties="Configuration=Release;_StreamRestore=1" />
+    <MSBuild Projects="ZipSaberWindow\ZipSaberWindow.csproj" Targets="Build" Properties="Configuration=Release" />
+  </Target>
+  <ItemGroup>
+    <EmbeddedResource Include="ZipSaberWindow\bin\Release\ZipSaberWindow.exe" LogicalName="ZipSaber.ZipSaberWindow.exe" />
+  </ItemGroup>
+  <!-- manifest.json with "gameVersion" set to $(GameVersion) -->
+  <Target Name="StampManifest" BeforeTargets="BeforeBuild">
+    <PropertyGroup>
+      <_Manifest>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/manifest.json'))</_Manifest>
+      <_Manifest>$([System.Text.RegularExpressions.Regex]::Replace('$(_Manifest)', '"gameVersion"\s*:\s*"[^"]*"', '"gameVersion": "$(GameVersion)"'))</_Manifest>
+    </PropertyGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <WriteLinesToFile File="$(IntermediateOutputPath)manifest.json" Lines="$(_Manifest)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <Message Importance="high" Text="ZipSaber: building for Beat Saber $(GameVersion) (references: $(GameLibs))" />
+  </Target>
 </Project>
