@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -35,7 +34,6 @@ namespace ZipSaberWindow
                 int I(string k) => o.TryGetValue(k, out var v) && int.TryParse(v, out int n) ? n : 0;
 
                 try { Native.SetProcessDPIAware(); } catch { }
-                if (o.TryGetValue("accent", out var acc)) try { SaberAnim.Accent = ColorTranslator.FromHtml(acc); } catch { }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Application.Run(new HostForm(
@@ -56,9 +54,7 @@ namespace ZipSaberWindow
         private IntPtr _child = IntPtr.Zero;
         private volatile bool _restarting;
         private bool _closingGame;
-        private Bitmap _lastFrame;   // shown dimmed behind the loading animation while the game swaps underneath
-        private readonly System.Windows.Forms.Timer _animTick = new System.Windows.Forms.Timer { Interval = 16 };
-        private readonly Stopwatch _animClock = new Stopwatch();
+        private Bitmap _lastFrame;   // shown (no text) while the game swaps underneath
         private readonly System.Windows.Forms.Timer _tick = new System.Windows.Forms.Timer { Interval = 100 };
 
         private string RequestPath => Path.Combine(_dir, "restart.req");
@@ -93,11 +89,6 @@ namespace ZipSaberWindow
             if (fullscreen) Shown += (s, e) => SetFullscreen(true);
             _tick.Tick += (s, e) => OnTick();
             _tick.Start();
-            _animTick.Tick += (s, e) =>
-            {
-                if (_child == IntPtr.Zero) Invalidate();
-                else { _animTick.Stop(); _animClock.Reset(); }
-            };
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -241,7 +232,6 @@ namespace ZipSaberWindow
                 else if (l == "fullscreen=0") SetFullscreen(false);
                 else if (l == "fullscreen=toggle") SetFullscreen(!_fullscreen);
                 else if (l == "activate") ActivateChild();
-                else if (l.StartsWith("accent=")) try { SaberAnim.Accent = ColorTranslator.FromHtml(l.Substring(7)); } catch { }
             }
         }
 
@@ -274,18 +264,10 @@ namespace ZipSaberWindow
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            var g = e.Graphics;
-            g.Clear(Color.Black);
-            if (_child != IntPtr.Zero) return;   // the game covers us
-            var c = ClientRectangle;
-            if (_lastFrame != null)
-            {
-                g.DrawImage(_lastFrame, c);
-                using (var dim = new SolidBrush(Color.FromArgb(170, 0, 0, 0))) g.FillRectangle(dim, c);
-            }
-            if (_animClock.IsRunning) SaberAnim.Draw(g, c, _animClock.Elapsed.TotalSeconds);
+            e.Graphics.Clear(Color.Black);
+            if (_child == IntPtr.Zero && _lastFrame != null)
+                e.Graphics.DrawImage(_lastFrame, ClientRectangle);   // hold the last picture, no text
         }
-
         // ── Restart (requested by ZipSaber) ─────────────────────────────────────
         private void CheckRestartRequest()
         {
@@ -300,7 +282,6 @@ namespace ZipSaberWindow
             catch { return; }   // still being written
 
             _restarting = true;
-            _animClock.Restart(); _animTick.Start();
             SnapshotChild();
             _child = IntPtr.Zero;   // old window is going away; paint the held frame behind it
             Invalidate();
@@ -386,151 +367,6 @@ namespace ZipSaberWindow
             }
             try { File.Delete(InfoPath); } catch { }
             base.OnFormClosing(e);
-        }
-    }
-
-    /// <summary>
-    /// Loading animation in the style of ZipSaber's Note Slots: flat colours, dark housing, reel window,
-    /// accent payline. Side-on 2D: a saber pivots from its hilt on the left; a note slides in from the
-    /// right and gets sliced - red note on a down swing, then blue note on an up swing. Loops.
-    /// </summary>
-    internal static class SaberAnim
-    {
-        internal static Color Accent = Color.FromArgb(95, 168, 232);
-        private static readonly Color Red = Color.FromArgb(219, 43, 51);     // slot machine note red
-        private static readonly Color Blue = Color.FromArgb(43, 107, 235);   // slot machine note blue
-        private static readonly Color Housing = Color.FromArgb(242, 8, 8, 13);
-        private static readonly Color Window = Color.FromArgb(28, 28, 38);
-        private const double Period = 2.2;   // seconds for down + up
-
-        private static float Clamp01(double v) => (float)Math.Max(0, Math.Min(1, v));
-        private static float EaseInOut(float t) => t < 0.5f ? 4 * t * t * t : 1 - (float)Math.Pow(-2 * t + 2, 3) / 2;
-        private static float EaseOut(float t) => 1 - (float)Math.Pow(1 - t, 3);
-        private static Color A(Color c, float a) => Color.FromArgb((int)(c.A * Math.Max(0, Math.Min(1, a))), c.R, c.G, c.B);
-
-        internal static void Draw(Graphics g, Rectangle c, double seconds)
-        {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            float s = Math.Min(c.Width / 7.5f, c.Height / 4.2f) * 0.8f;   // note size
-            if (s < 6) return;
-            float cx = c.X + c.Width / 2f, cy = c.Y + c.Height / 2f;
-
-            // housing + reel window + payline, like the slot machine
-            var housing = new RectangleF(cx - s * 3.4f, cy - s * 1.85f, s * 6.8f, s * 3.7f);
-            var window = RectangleF.Inflate(housing, -s * 0.22f, -s * 0.22f);
-            using (var p = RoundRect(housing, s * 0.35f)) using (var b = new SolidBrush(Housing)) g.FillPath(b, p);
-            using (var p = RoundRect(housing, s * 0.35f)) using (var pen = new Pen(A(Accent, 0.35f), Math.Max(1f, s * 0.04f))) g.DrawPath(pen, p);
-            using (var p = RoundRect(window, s * 0.22f)) using (var b = new SolidBrush(Window)) g.FillPath(b, p);
-
-            var state = g.Save();
-            using (var clip = RoundRect(window, s * 0.22f)) g.SetClip(clip);
-            using (var pay = new SolidBrush(A(Accent, 0.45f)))
-                g.FillRectangle(pay, window.Left, cy - s * 0.025f, window.Width, s * 0.05f);
-
-            double t = (seconds % Period) / Period;
-            bool down = t < 0.5;
-            double u = (t % 0.5) / 0.5;
-            Color col = down ? Red : Blue;
-
-            // geometry: hilt pivot on the left, note rests where the blade crosses the payline
-            var pivot = new PointF(window.Left + s * 1.0f, cy);
-            float bladeLen = s * 3.9f;
-            var rest = new PointF(pivot.X + s * 2.7f, cy);
-
-            float slide = EaseOut(Clamp01(u / 0.3));                        // note flies in from the right
-            float swing = EaseInOut(Clamp01((u - 0.28) / 0.34));            // saber swing
-            float cut = 0.5f;                                               // blade level with the note
-            bool sliced = swing >= cut;
-            float split = Clamp01((u - (0.28 + 0.34 * 0.5)) / 0.45);
-
-            float startAng = down ? -62f : 62f, endAng = down ? 62f : -62f;  // degrees, + is downwards
-            float ang = startAng + (endAng - startAng) * swing;
-
-            // swing trail (sector between hilt and blade tip)
-            if (u > 0.28 && u < 0.85)
-            {
-                float trailFade = Clamp01(1 - (u - 0.62) / 0.23);
-                float from = startAng + (endAng - startAng) * Math.Max(0, swing - 0.5f);
-                float sweep = ang - from;
-                if (Math.Abs(sweep) > 0.5f)
-                {
-                    var outer = new RectangleF(pivot.X - bladeLen, pivot.Y - bladeLen, bladeLen * 2, bladeLen * 2);
-                    using (var path = new GraphicsPath())
-                    {
-                        path.AddPie(outer.X, outer.Y, outer.Width, outer.Height, from, sweep);
-                        using (var b = new SolidBrush(A(col, 0.14f * trailFade))) g.FillPath(b, path);
-                    }
-                }
-            }
-
-            // note
-            if (!sliced)
-            {
-                float x = rest.X + (window.Right + s - rest.X) * (1 - slide);
-                DrawNote(g, x, rest.Y, s, col, 1f, 0, 0, 0);
-            }
-            else
-            {
-                float e = EaseOut(split), off = s * 0.75f * e, drift = s * 0.5f * e, rot = 22f * e;
-                float alpha = 1 - split;
-                // the swing pushes the halves apart along its direction
-                float dir = down ? 1 : -1;
-                DrawNote(g, rest.X + drift, rest.Y - off, s, col, alpha, -rot * dir, -1, 0);   // top half
-                DrawNote(g, rest.X + drift, rest.Y + off, s, col, alpha, rot * dir, 1, 0);     // bottom half
-            }
-
-            // saber (drawn on top): grey hilt behind the pivot, flat glowing blade in front
-            {
-                const float appear = 1f;   // always visible: each swing ends where the next one starts
-                var st2 = g.Save();
-                g.TranslateTransform(pivot.X, pivot.Y);
-                g.RotateTransform(ang);
-                float bw = s * 0.16f;
-                using (var glow = new Pen(A(col, 0.35f * appear), bw * 2.4f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-                    g.DrawLine(glow, 0, 0, bladeLen, 0);
-                using (var blade = new Pen(A(col, appear), bw) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-                    g.DrawLine(blade, 0, 0, bladeLen, 0);
-                using (var core = new Pen(A(Color.White, 0.85f * appear), bw * 0.35f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-                    g.DrawLine(core, s * 0.1f, 0, bladeLen - s * 0.05f, 0);
-                using (var hilt = RoundRect(new RectangleF(-s * 0.62f, -bw * 1.1f, s * 0.66f, bw * 2.2f), bw * 0.6f))
-                using (var hb = new SolidBrush(A(Color.FromArgb(78, 80, 94), appear))) g.FillPath(hb, hilt);
-                using (var grip = new SolidBrush(A(Color.FromArgb(48, 50, 60), appear)))
-                    for (int i = 0; i < 3; i++) g.FillRectangle(grip, -s * 0.5f + i * s * 0.16f, -bw * 1.1f, s * 0.05f, bw * 2.2f);
-                using (var guard = new SolidBrush(A(col, appear))) g.FillRectangle(guard, -s * 0.02f, -bw * 1.25f, s * 0.07f, bw * 2.5f);
-                g.Restore(st2);
-            }
-
-            g.Restore(state);
-        }
-
-        /// <param name="half">0 = whole note, -1 = top half, 1 = bottom half (side-on cut)</param>
-        private static void DrawNote(Graphics g, float x, float y, float size, Color col, float alpha, float rotDeg, int half, int _)
-        {
-            if (alpha <= 0.01f) return;
-            var st = g.Save();
-            g.TranslateTransform(x, y);
-            g.RotateTransform(rotDeg);
-            float h = size / 2f;
-            if (half != 0) g.SetClip(new RectangleF(-size, half < 0 ? -size : 0, size * 2, size), CombineMode.Intersect);
-            using (var p = RoundRect(new RectangleF(-h, -h, size, size), size * 0.2f))
-            using (var b = new SolidBrush(A(col, alpha))) g.FillPath(b, p);
-            // seen from the side: the arrow face points left (towards the player) - white strip on that edge
-            using (var b = new SolidBrush(A(Color.White, 0.9f * alpha)))
-            using (var p = RoundRect(new RectangleF(-h + size * 0.08f, -h + size * 0.2f, size * 0.12f, size * 0.6f), size * 0.05f))
-                g.FillPath(b, p);
-            g.Restore(st);
-        }
-
-        private static GraphicsPath RoundRect(RectangleF r, float rad)
-        {
-            var p = new GraphicsPath();
-            float d = Math.Min(rad * 2, Math.Min(r.Width, r.Height));
-            p.AddArc(r.X, r.Y, d, d, 180, 90);
-            p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-            p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-            p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-            p.CloseFigure();
-            return p;
         }
     }
 
