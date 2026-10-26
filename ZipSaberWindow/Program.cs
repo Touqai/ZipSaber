@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -54,7 +55,9 @@ namespace ZipSaberWindow
         private IntPtr _child = IntPtr.Zero;
         private volatile bool _restarting;
         private bool _closingGame;
-        private Bitmap _lastFrame;   // shown (no text) while the game swaps underneath
+        private Bitmap _lastFrame;   // shown dimmed behind the loading animation while the game swaps underneath
+        private readonly System.Windows.Forms.Timer _animTick = new System.Windows.Forms.Timer { Interval = 16 };
+        private readonly Stopwatch _animClock = new Stopwatch();
         private readonly System.Windows.Forms.Timer _tick = new System.Windows.Forms.Timer { Interval = 100 };
 
         private string RequestPath => Path.Combine(_dir, "restart.req");
@@ -89,6 +92,11 @@ namespace ZipSaberWindow
             if (fullscreen) Shown += (s, e) => SetFullscreen(true);
             _tick.Tick += (s, e) => OnTick();
             _tick.Start();
+            _animTick.Tick += (s, e) =>
+            {
+                if (_child == IntPtr.Zero) Invalidate();
+                else { _animTick.Stop(); _animClock.Reset(); }
+            };
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -264,10 +272,18 @@ namespace ZipSaberWindow
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            e.Graphics.Clear(Color.Black);
-            if (_child == IntPtr.Zero && _lastFrame != null)
-                e.Graphics.DrawImage(_lastFrame, ClientRectangle);   // hold the last picture, no text
+            var g = e.Graphics;
+            g.Clear(Color.Black);
+            if (_child != IntPtr.Zero) return;   // the game covers us
+            var c = ClientRectangle;
+            if (_lastFrame != null)
+            {
+                g.DrawImage(_lastFrame, c);
+                using (var dim = new SolidBrush(Color.FromArgb(170, 0, 0, 0))) g.FillRectangle(dim, c);
+            }
+            if (_animClock.IsRunning) SaberAnim.Draw(g, c, _animClock.Elapsed.TotalSeconds);
         }
+
         // ── Restart (requested by ZipSaber) ─────────────────────────────────────
         private void CheckRestartRequest()
         {
@@ -282,6 +298,7 @@ namespace ZipSaberWindow
             catch { return; }   // still being written
 
             _restarting = true;
+            _animClock.Restart(); _animTick.Start();
             SnapshotChild();
             _child = IntPtr.Zero;   // old window is going away; paint the held frame behind it
             Invalidate();
@@ -367,6 +384,127 @@ namespace ZipSaberWindow
             }
             try { File.Delete(InfoPath); } catch { }
             base.OnFormClosing(e);
+        }
+    }
+
+    /// <summary>
+    /// Loading animation: a note with a down arrow gets cut by a saber swinging down, then a note with
+    /// an up arrow gets cut swinging up. Loops. Pure GDI+, no assets.
+    /// </summary>
+    internal static class SaberAnim
+    {
+        private static readonly Color NoteRed = Color.FromArgb(214, 36, 46);
+        private static readonly Color NoteRedDark = Color.FromArgb(120, 14, 22);
+        private static readonly Color SaberBlue = Color.FromArgb(52, 160, 255);
+        private const double Period = 1.8;   // seconds for down + up
+
+        private static float Clamp01(double v) => (float)Math.Max(0, Math.Min(1, v));
+        private static float Ease(float t) => t < 0.5f ? 4 * t * t * t : 1 - (float)Math.Pow(-2 * t + 2, 3) / 2;
+
+        internal static void Draw(Graphics g, Rectangle c, double seconds)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            float s = Math.Min(c.Width, c.Height) * 0.13f;           // note size
+            if (s < 8) return;
+            float cx = c.X + c.Width / 2f, cy = c.Y + c.Height / 2f;
+
+            double t = (seconds % Period) / Period;
+            bool down = t < 0.5;
+            double u = (t % 0.5) / 0.5;                               // 0..1 inside this half
+
+            float appear = Clamp01(u / 0.18);
+            float swing = Ease(Clamp01((u - 0.18) / 0.38));
+            const double cutAt = 0.37;                                // when the blade crosses the note
+            float split = Clamp01((u - cutAt) / 0.5);
+
+            // ── note ─────────────────────────────────────────────────────────
+            if (u < cutAt)
+            {
+                float k = 0.75f + 0.25f * Ease(appear);
+                DrawNote(g, cx, cy, s * k, down, (int)(255 * appear), 0, 0, null);
+            }
+            else
+            {
+                float off = s * 0.85f * Ease(split);
+                float rot = 14f * split;
+                int a = (int)(255 * (1 - split));
+                DrawNote(g, cx - off, cy + off * 0.15f, s, down, a, -rot, -1, null);   // left half
+                DrawNote(g, cx + off, cy + off * 0.15f, s, down, a, rot, 1, null);     // right half
+            }
+
+            // ── saber: vertical swing through the note, with a fading trail ─────
+            float travel = s * 2.6f;
+            float y0 = down ? cy - travel : cy + travel, y1 = down ? cy + travel : cy - travel;
+            if (u >= 0.18 && u <= 0.85)
+            {
+                float head = y0 + (y1 - y0) * swing;
+                float trailStart = y0 + (y1 - y0) * Math.Max(0f, swing - 0.45f);
+                float fade = Clamp01(1 - (u - 0.56) / 0.29);           // trail fades after the swing ends
+                float w = s * 0.13f;
+
+                using (var glow = new LinearGradientBrush(new PointF(cx, trailStart - 1), new PointF(cx, head + (down ? 1 : -1)),
+                           Color.FromArgb(0, SaberBlue), Color.FromArgb((int)(150 * fade), SaberBlue)))
+                {
+                    var r = RectangleF.FromLTRB(cx - w * 1.6f, Math.Min(trailStart, head), cx + w * 1.6f, Math.Max(trailStart, head));
+                    if (r.Height > 1) g.FillRectangle(glow, r);
+                }
+                using (var core = new LinearGradientBrush(new PointF(cx, trailStart - 1), new PointF(cx, head + (down ? 1 : -1)),
+                           Color.FromArgb(0, Color.White), Color.FromArgb((int)(230 * fade), Color.White)))
+                {
+                    var r = RectangleF.FromLTRB(cx - w * 0.25f, Math.Min(trailStart, head), cx + w * 0.25f, Math.Max(trailStart, head));
+                    if (r.Height > 1) g.FillRectangle(core, r);
+                }
+                if (swing < 1f)
+                {
+                    // the blade itself: a short bright bar across the swing, slightly tilted
+                    float bl = s * 1.9f, tilt = down ? -0.18f : 0.18f;
+                    float[] widths = { w * 4.2f, w * 2.6f, w * 1.6f }; int[] alphas = { 40, 80, 170 };
+                    for (int i = 0; i < 3; i++)
+                        using (var p = new Pen(Color.FromArgb(alphas[i], SaberBlue), widths[i]) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                            g.DrawLine(p, cx - bl / 2, head - bl / 2 * tilt, cx + bl / 2, head + bl / 2 * tilt);
+                    using (var p = new Pen(Color.White, w * 0.7f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                        g.DrawLine(p, cx - bl / 2, head - bl / 2 * tilt, cx + bl / 2, head + bl / 2 * tilt);
+                }
+            }
+        }
+
+        /// <param name="half">0 = whole note, -1 = left half, 1 = right half</param>
+        private static void DrawNote(Graphics g, float x, float y, float size, bool arrowDown, int alpha, float rotDeg, int half, object _)
+        {
+            if (alpha <= 0) return;
+            var state = g.Save();
+            g.TranslateTransform(x, y);
+            g.RotateTransform(rotDeg);
+            if (half != 0) g.SetClip(new RectangleF(half < 0 ? -size : 0, -size, size, size * 2));
+
+            float h = size / 2f, r = size * 0.18f;
+            using (var path = RoundRect(-h, -h, size, size, r))
+            {
+                using (var fill = new LinearGradientBrush(new PointF(0, -h), new PointF(0, h),
+                           Color.FromArgb(alpha, NoteRed), Color.FromArgb(alpha, NoteRedDark)))
+                    g.FillPath(fill, path);
+                using (var edge = new Pen(Color.FromArgb(alpha / 2, 255, 120, 120), size * 0.03f)) g.DrawPath(edge, path);
+            }
+            // chevron arrow near the edge it points to
+            float aw = size * 0.30f, ah = size * 0.14f, ay = arrowDown ? h * 0.42f : -h * 0.42f;
+            var tri = arrowDown
+                ? new[] { new PointF(-aw, ay - ah), new PointF(aw, ay - ah), new PointF(0, ay + ah) }
+                : new[] { new PointF(-aw, ay + ah), new PointF(aw, ay + ah), new PointF(0, ay - ah) };
+            using (var b = new SolidBrush(Color.FromArgb(alpha, Color.White))) g.FillPolygon(b, tri);
+
+            g.Restore(state);
+        }
+
+        private static GraphicsPath RoundRect(float x, float y, float w, float h, float r)
+        {
+            var p = new GraphicsPath();
+            float d = r * 2;
+            p.AddArc(x, y, d, d, 180, 90);
+            p.AddArc(x + w - d, y, d, d, 270, 90);
+            p.AddArc(x + w - d, y + h - d, d, d, 0, 90);
+            p.AddArc(x, y + h - d, d, d, 90, 90);
+            p.CloseFigure();
+            return p;
         }
     }
 
