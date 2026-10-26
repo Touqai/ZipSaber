@@ -40,7 +40,8 @@ namespace ZipSaberWindow
                     o.TryGetValue("dir", out var d) ? d : AppDomain.CurrentDomain.BaseDirectory,
                     o.TryGetValue("game", out var g) ? g : null,
                     I("pid"), new Rectangle(I("x"), I("y"), I("w"), I("h")),
-                    o.TryGetValue("title", out var t) ? t : "Beat Saber"));
+                    o.TryGetValue("title", out var t) ? t : "Beat Saber",
+                    I("fullscreen") == 1));
             }
         }
     }
@@ -59,7 +60,11 @@ namespace ZipSaberWindow
         private string RequestPath => Path.Combine(_dir, "restart.req");
         private string InfoPath => Path.Combine(_dir, "host.info");
 
-        internal HostForm(string dir, string gameExe, int pid, Rectangle gameRect, string title)
+        private bool _fullscreen;
+        private Rectangle _windowedBounds;
+        private string CmdPath => Path.Combine(_dir, "host.cmd");
+
+        internal HostForm(string dir, string gameExe, int pid, Rectangle gameRect, string title, bool fullscreen)
         {
             _dir = dir;
             _gameExe = gameExe;
@@ -81,6 +86,7 @@ namespace ZipSaberWindow
 
             if (pid > 0) try { _game = Process.GetProcessById(pid); } catch { }
 
+            if (fullscreen) Shown += (s, e) => SetFullscreen(true);
             _tick.Tick += (s, e) => OnTick();
             _tick.Start();
         }
@@ -95,6 +101,7 @@ namespace ZipSaberWindow
         private void OnTick()
         {
             CheckRestartRequest();
+            CheckCommands();
             if (_restarting) return;
 
             bool alive = false;
@@ -112,7 +119,7 @@ namespace ZipSaberWindow
             if (_child == IntPtr.Zero || !Native.IsWindow(_child))
             {
                 _child = IntPtr.Zero;
-                var w = FindGameWindow(_game.Id);
+                var w = FindGameWindow(_game.Id, Handle);
                 if (w != IntPtr.Zero) Adopt(w);
                 if (_child != IntPtr.Zero) ClearLastFrame();
             }
@@ -125,9 +132,17 @@ namespace ZipSaberWindow
             }
         }
 
-        private static IntPtr FindGameWindow(int pid)
+        private static IntPtr FindGameWindow(int pid, IntPtr host)
         {
             IntPtr found = IntPtr.Zero;
+            // launched with -parentHWND: Unity created its window inside ours already
+            Native.EnumChildWindows(host, (h, l) =>
+            {
+                Native.GetWindowThreadProcessId(h, out uint p);
+                if (p == pid && Native.GetParent(h) == host) { found = h; return false; }
+                return true;
+            }, IntPtr.Zero);
+            if (found != IntPtr.Zero) return found;
             Native.EnumWindows((h, l) =>
             {
                 Native.GetWindowThreadProcessId(h, out uint p);
@@ -166,7 +181,15 @@ namespace ZipSaberWindow
         private void ActivateChild()
         {
             if (_child == IntPtr.Zero) return;
-            Native.PostMessage(_child, Native.WM_ACTIVATE, new IntPtr(Native.WA_ACTIVE), IntPtr.Zero);
+            // Unity's embedded-window contract: forward activation, and give the game keyboard focus
+            Native.SendMessage(_child, Native.WM_ACTIVATE, new IntPtr(Native.WA_ACTIVE), IntPtr.Zero);
+            uint childThread = Native.GetWindowThreadProcessId(_child, out _);
+            uint myThread = Native.GetCurrentThreadId();
+            if (childThread != 0 && childThread != myThread && Native.AttachThreadInput(myThread, childThread, true))
+            {
+                Native.SetFocus(_child);
+                Native.AttachThreadInput(myThread, childThread, false);
+            }
         }
 
         protected override void OnResize(EventArgs e) { base.OnResize(e); FitChild(); }
@@ -174,7 +197,42 @@ namespace ZipSaberWindow
         protected override void OnDeactivate(EventArgs e)
         {
             base.OnDeactivate(e);
-            if (_child != IntPtr.Zero) Native.PostMessage(_child, Native.WM_ACTIVATE, new IntPtr(Native.WA_INACTIVE), IntPtr.Zero);
+            if (_child != IntPtr.Zero) Native.SendMessage(_child, Native.WM_ACTIVATE, new IntPtr(Native.WA_INACTIVE), IntPtr.Zero);
+        }
+
+        // ── Fullscreen (the game can't fullscreen a child window, so the host does it) ──
+        private void SetFullscreen(bool on)
+        {
+            if (on == _fullscreen) return;
+            _fullscreen = on;
+            if (on)
+            {
+                _windowedBounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+                WindowState = FormWindowState.Normal;
+                FormBorderStyle = FormBorderStyle.None;
+                Bounds = Screen.FromHandle(Handle).Bounds;
+            }
+            else
+            {
+                FormBorderStyle = FormBorderStyle.Sizable;
+                if (_windowedBounds.Width > 0) Bounds = _windowedBounds;
+            }
+            FitChild();
+            ActivateChild();
+        }
+
+        private void CheckCommands()
+        {
+            if (!File.Exists(CmdPath)) return;
+            string[] lines;
+            try { lines = File.ReadAllLines(CmdPath); File.Delete(CmdPath); } catch { return; }
+            foreach (var l in lines)
+            {
+                if (l == "fullscreen=1") SetFullscreen(true);
+                else if (l == "fullscreen=0") SetFullscreen(false);
+                else if (l == "fullscreen=toggle") SetFullscreen(!_fullscreen);
+                else if (l == "activate") ActivateChild();
+            }
         }
 
         private void SnapshotChild()
@@ -269,7 +327,13 @@ namespace ZipSaberWindow
             try
             {
                 // started by us = our child process, so Discord's app audio for this window includes it
-                return Process.Start(new ProcessStartInfo(exe, Get("args") ?? "")
+                string args = (Get("args") ?? "").Trim();
+                IntPtr host = IntPtr.Zero;
+                try { host = (IntPtr)Invoke((Func<IntPtr>)(() => Handle)); } catch { }
+                // -parentHWND: Unity creates its window inside ours and handles focus/cursor as an embedded player
+                if (host != IntPtr.Zero && args.IndexOf("-parentHWND", StringComparison.OrdinalIgnoreCase) < 0)
+                    args = (args + $" -parentHWND {host.ToInt64()}").Trim();
+                return Process.Start(new ProcessStartInfo(exe, args)
                 {
                     UseShellExecute = false,
                     WorkingDirectory = Get("workdir") ?? Path.GetDirectoryName(exe)
@@ -327,6 +391,12 @@ namespace ZipSaberWindow
         [DllImport("user32.dll")] internal static extern bool PostMessage(IntPtr hwnd, int msg, IntPtr w, IntPtr l);
         [DllImport("user32.dll")] internal static extern bool SetProcessDPIAware();
         [DllImport("user32.dll")] internal static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
+        [DllImport("user32.dll")] internal static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr w, IntPtr l);
+        [DllImport("user32.dll")] internal static extern bool AttachThreadInput(uint a, uint b, bool attach);
+        [DllImport("user32.dll")] internal static extern IntPtr SetFocus(IntPtr hwnd);
+        [DllImport("user32.dll")] internal static extern IntPtr GetParent(IntPtr hwnd);
+        [DllImport("user32.dll")] internal static extern bool EnumChildWindows(IntPtr parent, EnumProc cb, IntPtr l);
+        [DllImport("kernel32.dll")] internal static extern uint GetCurrentThreadId();
         [StructLayout(LayoutKind.Sequential)] internal struct RECT { public int left, top, right, bottom; }
         [DllImport("user32.dll")] internal static extern bool GetWindowRect(IntPtr hwnd, out RECT rc);
         [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] internal static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int idx);

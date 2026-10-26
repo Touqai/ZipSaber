@@ -26,31 +26,82 @@ namespace ZipSaber
         internal static readonly HashSet<string> UpdatedThisSession = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         internal static readonly HashSet<string> Updating = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        internal static void EnsureLoaded()
+        private static readonly List<Action<string>> _waiters = new List<Action<string>>();
+        internal static bool FromCache { get; private set; }
+
+        private static string CachePath => Path.Combine(ModFileOps.GameDir, "UserData", "ZipSaber", "beatmods-cache.json");
+
+        internal static void EnsureLoaded() => Load(null);
+
+        /// <summary>
+        /// One shared fetch (Mod Manager + Browse used to fetch separately). Retries, and falls back
+        /// to the last good copy on disk if BeatMods is unreachable. done(error) runs on the main thread;
+        /// error is null on success (live or cached).
+        /// </summary>
+        internal static void Load(Action<string> done, bool force = false)
         {
-            if (Loaded || _loading) return;
+            if (Loaded && !force) { done?.Invoke(null); return; }
+            if (done != null) _waiters.Add(done);
+            if (_loading) return;
             _loading = true;
+
             string gameVer = IPA.Utilities.UnityGame.GameVersion.ToString();
             int us = gameVer.IndexOf('_'); if (us > 0) gameVer = gameVer.Substring(0, us);
             string url = $"{BeatModsBrowserViewController.BeatModsApi}/mod?status=approved&gameVersion={gameVer}&sort=name&sortDirection=1";
 
             System.Threading.ThreadPool.QueueUserWorkItem(_ =>
             {
-                List<Entry> list = null;
-                try
+                string json = null, error = null; bool cached = false;
+                try { ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12; } catch { }
+                for (int attempt = 1; attempt <= 3 && json == null; attempt++)
                 {
-                    var wc = new WebClient(); wc.Headers[HttpRequestHeader.UserAgent] = "ZipSaber/2.0";
-                    list = BeatModsBrowserViewController.ParseBeatModsJson(wc.DownloadString(url))
-                        .GroupBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
-                        .Select(g => g.OrderByDescending(m => Ver(m.Version)).First())
-                        .ToList();
+                    try
+                    {
+                        using (var wc = new WebClient())
+                        {
+                            wc.Headers[HttpRequestHeader.UserAgent] = "ZipSaber/2.13 (Beat Saber mod manager)";
+                            wc.Headers[HttpRequestHeader.Accept] = "application/json";
+                            json = wc.DownloadString(url);
+                        }
+                        if (string.IsNullOrWhiteSpace(json) || json.TrimStart()[0] != '[') { error = "BeatMods sent an unexpected reply"; json = null; }
+                    }
+                    catch (WebException wex)
+                    {
+                        var code = (wex.Response as HttpWebResponse)?.StatusCode;
+                        error = code != null ? $"BeatMods replied {(int)code} {code}" : wex.Status + ": " + wex.Message;
+                        Plugin.Log?.Warn($"[BeatMods] Fetch attempt {attempt} failed: {error}");
+                    }
+                    catch (Exception ex) { error = ex.Message; Plugin.Log?.Warn($"[BeatMods] Fetch attempt {attempt} failed: {ex.Message}"); }
+                    if (json == null && attempt < 3) System.Threading.Thread.Sleep(1500 * attempt);
                 }
-                catch (Exception ex) { Plugin.Log?.Warn($"[Updates] Catalog fetch failed: {ex.Message}"); }
+
+                if (json != null) { try { File.WriteAllText(CachePath, json); } catch { } }
+                else if (File.Exists(CachePath))
+                {
+                    try { json = File.ReadAllText(CachePath); cached = true; Plugin.Log?.Warn("[BeatMods] Using the saved copy of the mod list."); } catch { }
+                }
+
+                List<Entry> list = null;
+                if (json != null)
+                {
+                    try
+                    {
+                        list = BeatModsBrowserViewController.ParseBeatModsJson(json)
+                            .GroupBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+                            .Select(g => g.OrderByDescending(m => Ver(m.Version)).First())
+                            .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+                    }
+                    catch (Exception ex) { error = "Couldn't read the mod list: " + ex.Message; list = null; }
+                }
+
                 MainThreadDispatcher.Enqueue(() =>
                 {
                     _loading = false;
-                    if (list == null) return;
-                    Set(list);
+                    if (list != null) { FromCache = cached; Set(list); error = null; }
+                    else Plugin.Log?.Error($"[BeatMods] Mod list unavailable: {error}");
+                    var w = _waiters.ToList(); _waiters.Clear();
+                    foreach (var cb in w) try { cb(error ?? null); } catch (Exception ex) { Plugin.Log?.Error($"[BeatMods] {ex}"); }
                 });
             });
         }

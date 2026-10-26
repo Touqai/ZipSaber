@@ -73,13 +73,25 @@ namespace ZipSaber
                 ClientToScreen(w, ref tl);
                 var title = new StringBuilder(256);
                 GetWindowText(w, title, title.Capacity);
+                // fullscreen = Unity says so, or the window covers its whole monitor
+                bool fullscreen = UnityEngine.Screen.fullScreen;
+                try
+                {
+                    GetWindowRect(w, out RECT wr);
+                    var mi = new MONITORINFO { cbSize = Marshal.SizeOf(typeof(MONITORINFO)) };
+                    if (GetMonitorInfo(MonitorFromWindow(w, 2), ref mi) &&
+                        wr.left <= mi.rcMonitor.left && wr.top <= mi.rcMonitor.top &&
+                        wr.right >= mi.rcMonitor.right && wr.bottom >= mi.rcMonitor.bottom) fullscreen = true;
+                }
+                catch { }
                 if (IsZoomed(w) || IsIconic(w)) { /* use defaults; host centers itself */ rc = new RECT(); }
 
                 if (!Extract()) return;
                 var me = Process.GetCurrentProcess();
                 string args = $"--dir \"{Dir}\" --game \"{me.MainModule?.FileName}\" --pid {me.Id} " +
                               $"--x {tl.x} --y {tl.y} --w {rc.right - rc.left} --h {rc.bottom - rc.top} " +
-                              $"--title \"{(title.Length > 0 ? title.ToString().Replace("\"", "") : "Beat Saber")}\"";
+                              $"--title \"{(title.Length > 0 ? title.ToString().Replace("\"", "") : "Beat Saber")}\" " +
+                              $"--fullscreen {(fullscreen ? 1 : 0)}";
                 ModFileOps.StartDetached(ExePath, args, Dir, noWindow: false);   // must not inherit our sockets/files
                 Plugin.Log?.Info("[Window] Window host started - the game window now survives restarts.");
             }
@@ -94,8 +106,11 @@ namespace ZipSaber
             {
                 var me = Process.GetCurrentProcess();
                 string exe = me.MainModule?.FileName ?? "";
-                string args = string.Join(" ", Environment.GetCommandLineArgs().Skip(1)
-                                .Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
+                // drop any old -parentHWND <n>; the host adds its own
+                var argList = Environment.GetCommandLineArgs().Skip(1).ToList();
+                int ph = argList.FindIndex(a => a.Equals("-parentHWND", StringComparison.OrdinalIgnoreCase));
+                if (ph >= 0) argList.RemoveRange(ph, Math.Min(2, argList.Count - ph));
+                string args = string.Join(" ", argList.Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
                 var sb = new StringBuilder();
                 sb.AppendLine("pid=" + me.Id);
                 sb.AppendLine("relaunch=" + (relaunch ? "1" : "0"));
@@ -177,7 +192,67 @@ namespace ZipSaber
             }
         }
 
+        /// <summary>Send a one-line command to the host (fullscreen=toggle, activate...).</summary>
+        internal static void SendCommand(string cmd)
+        {
+            try { File.AppendAllText(Path.Combine(Dir, "host.cmd"), cmd + "\n"); } catch { }
+        }
+
+        private static IntPtr _child, _host;
+        private static float _nextCheck;
+        private static bool _clipped, _comboHeld;
+
+        /// <summary>
+        /// Per frame while hosted. Unity doesn't lock the cursor for a window it didn't create as
+        /// embedded, so do it here: keep the cursor inside the game while it's locked (FPFC), and
+        /// route Alt+Enter / F11 to the host since a child window can't go fullscreen.
+        /// </summary>
+        internal static void Tick()
+        {
+            if (UnityEngine.Time.unscaledTime >= _nextCheck)
+            {
+                _nextCheck = UnityEngine.Time.unscaledTime + 1f;
+                _child = FindOwnWindow();
+                _host = _child != IntPtr.Zero ? GetParent(_child) : IntPtr.Zero;
+            }
+            if (_host == IntPtr.Zero) { Unclip(); return; }
+
+            if (GetForegroundWindow() == _host)
+            {
+                bool alt = (GetAsyncKeyState(0x12 /*VK_MENU*/) & 0x8000) != 0;
+                bool combo = (alt && (GetAsyncKeyState(0x0D /*VK_RETURN*/) & 0x8000) != 0) || (GetAsyncKeyState(0x7A /*VK_F11*/) & 0x8000) != 0;
+                if (combo && !_comboHeld) SendCommand("fullscreen=toggle");
+                _comboHeld = combo;
+            }
+
+            bool locked = UnityEngine.Cursor.lockState != UnityEngine.CursorLockMode.None;
+            if (!locked || GetForegroundWindow() != _host) { Unclip(); return; }
+
+            GetClientRect(_child, out RECT rc);
+            var tl = new POINT(); ClientToScreen(_child, ref tl);
+            var r = new RECT { left = tl.x, top = tl.y, right = tl.x + rc.right, bottom = tl.y + rc.bottom };
+            if (r.right <= r.left || r.bottom <= r.top) return;
+            ClipCursor(ref r);
+            _clipped = true;
+        }
+
+        private static void Unclip()
+        {
+            if (!_clipped) return;
+            ClipCursor(IntPtr.Zero);
+            _clipped = false;
+        }
+
         // ── Win32 ────────────────────────────────────────────────────────────────
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MONITORINFO { public int cbSize; public RECT rcMonitor, rcWork; public uint dwFlags; }
+        [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr h, uint flags);
+        [DllImport("user32.dll")] private static extern bool GetMonitorInfo(IntPtr mon, ref MONITORINFO mi);
+        [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr h, out RECT rc);
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vk);
+        [DllImport("user32.dll")] private static extern bool ClipCursor(ref RECT r);
+        [DllImport("user32.dll")] private static extern bool ClipCursor(IntPtr r);
         [StructLayout(LayoutKind.Sequential)] private struct RECT { public int left, top, right, bottom; }
         [StructLayout(LayoutKind.Sequential)] private struct POINT { public int x, y; }
         private delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);

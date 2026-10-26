@@ -172,35 +172,22 @@ namespace ZipSaber
         {
             StatusLabel = "Fetching from BeatMods…";
             NotifyPropertyChanged(nameof(StatusLabel));
+            bool done = false; string error = null;
+            BeatModsCatalog.Load(err => { error = err; done = true; }, force: _allMods.Count == 0 && BeatModsCatalog.FromCache);
+            yield return new WaitUntil(() => done);
+            if (this == null) yield break;
 
-            string gameVer = IPA.Utilities.UnityGame.GameVersion.ToString();
-            int underscore = gameVer.IndexOf('_');
-            if (underscore > 0) gameVer = gameVer.Substring(0, underscore);
-
-            string url  = $"{BeatModsApi}/mod?status=approved&gameVersion={gameVer}&sort=name&sortDirection=1";
-            string json = null;
-            yield return FetchUrl(url, r => json = r);
-
-            if (string.IsNullOrEmpty(json))
+            if (error != null && !BeatModsCatalog.Loaded)
             {
-                StatusLabel = "Failed to load. Check connection.";
+                StatusLabel = $"Couldn't reach BeatMods ({error}).";
                 NotifyPropertyChanged(nameof(StatusLabel));
                 yield break;
             }
 
-            var parsed = ParseBeatModsJson(json);
-            var deduped = parsed
-                .GroupBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.OrderByDescending(m => SafeVersion(m.Version)).First())
-                .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            _allMods = deduped;
-            BeatModsCatalog.Set(_allMods);   // Mod Manager update checks use the same list
-            StatusLabel = $"{_allMods.Count} mods";
+            _allMods = BeatModsCatalog.Mods.ToList();
+            StatusLabel = BeatModsCatalog.FromCache ? $"{_allMods.Count} mods (offline copy)" : $"{_allMods.Count} mods";
             NotifyPropertyChanged(nameof(StatusLabel));
 
-            // Cache URL map so pending installs can download on close
             DownloadUrlsByName.Clear();
             foreach (var m in _allMods)
                 DownloadUrlsByName[m.Name] = m.DownloadUrl;

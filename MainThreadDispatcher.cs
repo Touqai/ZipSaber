@@ -38,6 +38,7 @@ namespace ZipSaber
 
         private void Update()
         {
+            try { WindowHost.Tick(); } catch { }
             while (true)
             {
                 Action action;
