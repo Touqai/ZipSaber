@@ -53,7 +53,7 @@ namespace ZipSaberWindow
         private IntPtr _child = IntPtr.Zero;
         private volatile bool _restarting;
         private bool _closingGame;
-        private string _status = "Starting Beat Saber...";
+        private Bitmap _lastFrame;   // shown (no text) while the game swaps underneath
         private readonly System.Windows.Forms.Timer _tick = new System.Windows.Forms.Timer { Interval = 100 };
 
         private string RequestPath => Path.Combine(_dir, "restart.req");
@@ -114,7 +114,7 @@ namespace ZipSaberWindow
                 _child = IntPtr.Zero;
                 var w = FindGameWindow(_game.Id);
                 if (w != IntPtr.Zero) Adopt(w);
-                SetStatus(_child == IntPtr.Zero ? "Starting Beat Saber..." : null);
+                if (_child != IntPtr.Zero) ClearLastFrame();
             }
             else if (Native.GetWindowRect(_child, out var r))
             {
@@ -177,19 +177,39 @@ namespace ZipSaberWindow
             if (_child != IntPtr.Zero) Native.PostMessage(_child, Native.WM_ACTIVATE, new IntPtr(Native.WA_INACTIVE), IntPtr.Zero);
         }
 
-        private void SetStatus(string s) { if (s != _status) { _status = s; Invalidate(); } }
+        private void SnapshotChild()
+        {
+            try
+            {
+                if (_child == IntPtr.Zero || !Native.GetWindowRect(_child, out var r)) return;
+                int w = r.right - r.left, h = r.bottom - r.top;
+                if (w <= 0 || h <= 0) return;
+                var bmp = new Bitmap(w, h);
+                using (var g = Graphics.FromImage(bmp))
+                {
+                    IntPtr hdc = g.GetHdc();
+                    try { Native.PrintWindow(_child, hdc, 0x2 /*PW_RENDERFULLCONTENT*/); }
+                    finally { g.ReleaseHdc(hdc); }
+                }
+                _lastFrame?.Dispose();
+                _lastFrame = bmp;
+            }
+            catch { }
+        }
+
+        private void ClearLastFrame()
+        {
+            if (_lastFrame == null) return;
+            _lastFrame.Dispose(); _lastFrame = null;
+            Invalidate();
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.Clear(Color.Black);
-            if (_status == null || _child != IntPtr.Zero) return;
-            using (var f = new Font("Segoe UI", 16f, FontStyle.Bold))
-            {
-                var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                e.Graphics.DrawString(_status, f, Brushes.Gainsboro, ClientRectangle, sf);
-            }
+            if (_child == IntPtr.Zero && _lastFrame != null)
+                e.Graphics.DrawImage(_lastFrame, ClientRectangle);   // hold the last picture, no text
         }
-
         // ── Restart (requested by ZipSaber) ─────────────────────────────────────
         private void CheckRestartRequest()
         {
@@ -204,14 +224,16 @@ namespace ZipSaberWindow
             catch { return; }   // still being written
 
             _restarting = true;
-            SetStatus("Restarting Beat Saber...");
+            SnapshotChild();
+            _child = IntPtr.Zero;   // old window is going away; paint the held frame behind it
+            Invalidate();
             Task.Run(() => DoRestart(req)).ContinueWith(t => BeginInvoke((Action)(() =>
             {
                 _child = IntPtr.Zero;
                 _game = t.Result;
                 _restarting = false;
                 if (_game == null) Close();
-                else SetStatus("Starting Beat Saber...");
+                else Invalidate();
             })));
         }
 
@@ -266,7 +288,6 @@ namespace ZipSaberWindow
                 // the game's window lives inside ours and would be destroyed with it, so ask the game to quit first
                 e.Cancel = true;
                 _closingGame = true;
-                SetStatus("Closing Beat Saber...");
                 if (_child != IntPtr.Zero) Native.PostMessage(_child, Native.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
                 var g = _game;
                 Task.Run(() =>
@@ -305,6 +326,7 @@ namespace ZipSaberWindow
         [DllImport("user32.dll")] internal static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int w, int h, uint flags);
         [DllImport("user32.dll")] internal static extern bool PostMessage(IntPtr hwnd, int msg, IntPtr w, IntPtr l);
         [DllImport("user32.dll")] internal static extern bool SetProcessDPIAware();
+        [DllImport("user32.dll")] internal static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
         [StructLayout(LayoutKind.Sequential)] internal struct RECT { public int left, top, right, bottom; }
         [DllImport("user32.dll")] internal static extern bool GetWindowRect(IntPtr hwnd, out RECT rc);
         [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] internal static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int idx);
