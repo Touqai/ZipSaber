@@ -198,8 +198,9 @@ namespace ZipSaber
         private void AttemptFindAndHookWindow()
         {
             Log.Debug("[Hooking] Finding window...");
-            IntPtr fHwnd = FindWindow(UnityWindowClass, null);
-            if (fHwnd == IntPtr.Zero) fHwnd = FindWindow(null, BeatSaberWindowTitle);
+            // our own Unity window (by process): FindWindow by title can hit the window host,
+            // which belongs to another process (SetWindowLongPtr -> access denied)
+            IntPtr fHwnd = WindowHost.FindOwnWindow();
             if (fHwnd == IntPtr.Zero) { try { fHwnd = Process.GetCurrentProcess().MainWindowHandle; } catch { Log.Warn("[Hooking] Failed get process handle."); } }
             if (fHwnd != IntPtr.Zero) { Log.Info($"[Hooking] Found {fHwnd}. Setting hook."); SetupWindowHook(fHwnd); }
             else { Log.Error("[Hooking] Failed find window."); hooksAttempted = false; }

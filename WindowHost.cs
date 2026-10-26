@@ -80,7 +80,7 @@ namespace ZipSaber
                 string args = $"--dir \"{Dir}\" --game \"{me.MainModule?.FileName}\" --pid {me.Id} " +
                               $"--x {tl.x} --y {tl.y} --w {rc.right - rc.left} --h {rc.bottom - rc.top} " +
                               $"--title \"{(title.Length > 0 ? title.ToString().Replace("\"", "") : "Beat Saber")}\"";
-                Process.Start(new ProcessStartInfo(ExePath, args) { UseShellExecute = false, WorkingDirectory = Dir });
+                ModFileOps.StartDetached(ExePath, args, Dir, noWindow: false);   // must not inherit our sockets/files
                 Plugin.Log?.Info("[Window] Window host started - the game window now survives restarts.");
             }
             catch (Exception ex) { Plugin.Log?.Warn($"[Window] Host start failed: {ex.Message}"); }
@@ -120,7 +120,7 @@ namespace ZipSaber
             }
         }
 
-        private static IntPtr FindOwnWindow()
+        internal static IntPtr FindOwnWindow()
         {
             uint pid = (uint)Process.GetCurrentProcess().Id;
             IntPtr found = IntPtr.Zero;

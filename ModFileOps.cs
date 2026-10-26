@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace ZipSaber
@@ -150,14 +151,9 @@ namespace ZipSaber
                 sb.AppendLine("Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force");
                 File.WriteAllText(ps1, sb.ToString(), new UTF8Encoding(true));
 
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "powershell.exe",
-                    Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{ps1}\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WorkingDirectory = TrashDir
-                });
+                StartDetached("powershell.exe",
+                    $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{ps1}\"",
+                    TrashDir, noWindow: true);
                 Plugin.Log?.Info($"[Restart] Helper started ({markerCount} file(s) to delete, relaunch={relaunch}).");
                 return true;
             }
@@ -197,14 +193,7 @@ namespace ZipSaber
                 sb.AppendLine("(goto) 2>nul & del /f /q \"%~f0\"");
                 File.WriteAllText(bat, sb.ToString());
 
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "cmd.exe",
-                    Arguments = $"/C \"\"{bat}\"\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WorkingDirectory = TrashDir
-                });
+                StartDetached("cmd.exe", $"/C \"\"{bat}\"\"", TrashDir, noWindow: true);
                 Plugin.Log?.Info($"[Restart] Batch helper started ({markers.Length} file(s), relaunch={relaunch}).");
                 return true;
             }
@@ -226,12 +215,45 @@ namespace ZipSaber
                 {
                     string exe = Process.GetCurrentProcess().MainModule?.FileName;
                     string args = string.Join(" ", Environment.GetCommandLineArgs().Skip(1).Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
-                    Process.Start(new ProcessStartInfo(exe, args) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) });
+                    StartDetached(exe, args, Path.GetDirectoryName(exe), noWindow: false);
                 }
                 catch (Exception ex) { Plugin.Log?.Error($"[Delete] Restart failed: {ex.Message}"); }
             }
             UnityEngine.Application.Quit();
         }
+
+        /// <summary>
+        /// Start a process WITHOUT inheriting the game's handles. Process.Start (UseShellExecute=false)
+        /// passes every inheritable handle - listening sockets, open files - to the new process, which
+        /// then keeps them alive after the game exits: the relaunched game can't bind its ports
+        /// (DataPuller, bsrpc...) and loaded DLLs can't be deleted.
+        /// </summary>
+        internal static void StartDetached(string exe, string args, string workDir, bool noWindow)
+        {
+            var si = new STARTUPINFO { cb = Marshal.SizeOf(typeof(STARTUPINFO)) };
+            uint flags = CREATE_UNICODE_ENVIRONMENT | (noWindow ? CREATE_NO_WINDOW : 0);
+            string cmd = $"\"{exe}\" {args}";
+            if (!CreateProcessW(null, new StringBuilder(cmd, cmd.Length + 1), IntPtr.Zero, IntPtr.Zero,
+                                false /* bInheritHandles */, flags, IntPtr.Zero, workDir, ref si, out var pi))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct STARTUPINFO
+        {
+            public int cb; public string lpReserved, lpDesktop, lpTitle;
+            public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+            public short wShowWindow, cbReserved2; public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+        }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct PROCESS_INFORMATION { public IntPtr hProcess, hThread; public int dwProcessId, dwThreadId; }
+        private const uint CREATE_NO_WINDOW = 0x08000000, CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool CreateProcessW(string app, StringBuilder cmd, IntPtr pa, IntPtr ta, bool inherit,
+            uint flags, IntPtr env, string dir, ref STARTUPINFO si, out PROCESS_INFORMATION pi);
+        [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr h);
 
         private static string BatEsc(string s) => (s ?? "").Replace("%", "%%");
     }
