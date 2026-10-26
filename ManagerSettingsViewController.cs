@@ -24,34 +24,28 @@ namespace ZipSaber
         [UIObject("back-slot")]   private GameObject _backSlot = null;
         [UIObject("paste-slot")]  private GameObject _pasteSlot = null;
         [UIObject("default-slot")] private GameObject _defaultSlot = null;
-        [UIObject("stream-slot")]  private GameObject _streamSlot = null;
         [UIComponent("sec-stream")] private TextMeshProUGUI _secStream = null;
-        private Image _streamBtn;
         private string _streamStatus = "";
 
         // ── Streaming ─────────────────────────────────────────────────────────────
-        [UIValue("auto-stream")]
-        public bool AutoStream
+        [UIValue("keep-window")]
+        public bool KeepWindow
         {
-            get => Plugin.Config?.AutoOpenStreamWindow ?? false;
-            set { if (Plugin.Config != null) Plugin.Config.AutoOpenStreamWindow = value; }
+            get => Plugin.Config?.KeepWindowOnRestart ?? true;
+            set { if (Plugin.Config != null) Plugin.Config.KeepWindowOnRestart = value; UpdateStreamStatus(); }
         }
 
         [UIValue("stream-status")]
         public string StreamStatus => _streamStatus;
 
-        private void OnOpenStream()
+        private void UpdateStreamStatus()
         {
-            string err = StreamWindow.Open();
-            UpdateStreamStatus(err, justOpened: err == null);
-        }
-
-        private void UpdateStreamStatus(string error = null, bool justOpened = false)
-        {
-            _streamStatus = error != null ? $"<color=#FF6B6B>{Esc(error)}</color>"
-                : justOpened || StreamWindow.IsRunning
-                    ? "<color=#7ED957>Stream window is open.</color> In Discord, share the <b>ZipSaber Stream</b> window. It stays live when ZipSaber restarts the game."
-                    : "Discord window shares end when the game restarts. Open the stream window and share that instead.";
+            bool on = Plugin.Config?.KeepWindowOnRestart ?? true;
+            _streamStatus = WindowHost.IsHosted
+                ? (on ? "<color=#7ED957>Active.</color> Restarts happen inside this window, so Discord keeps sharing it."
+                      : "Active until the next launch.")
+                : on ? "Turns on next time the game starts. Start your Discord share after that."
+                     : "Off - a restart closes the game window, which ends a Discord window share.";
             NotifyPropertyChanged(nameof(StreamStatus));
         }
 
@@ -159,7 +153,6 @@ namespace ZipSaber
                 UiKit.SlotButton(_backSlot, "BackBtn", UiKit.Neutral, OnGoBack, "<", 4f);
                 UiKit.SlotButton(_pasteSlot, "PasteBtn", UiKit.Neutral, OnWipPaste, "PASTE", 2.8f);
                 UiKit.SlotButton(_defaultSlot, "DefaultBtn", UiKit.Neutral, OnWipReset, "DEFAULT", 2.8f);
-                _streamBtn = UiKit.SlotButton(_streamSlot, "StreamBtn", Theme.Accent, OnOpenStream, "OPEN WINDOW", 2.6f);
                 BuildSwatches();
             }
             Theme.Changed -= ApplyTheme;
@@ -206,7 +199,6 @@ namespace ZipSaber
             if (_secMaps != null) _secMaps.color = a;
             if (_secLook != null) _secLook.color = a;
             if (_secStream != null) _secStream.color = a;
-            if (_streamBtn != null) UiKit.Recolor(_streamBtn, a);
             if (_preview != null) _preview.color = a;
             NotifyPropertyChanged(nameof(AccentHue));
         }

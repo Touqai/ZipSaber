@@ -3,8 +3,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net472</TargetFramework>
-    <AssemblyName>ZipSaberStream</AssemblyName>
-    <RootNamespace>ZipSaberStream</RootNamespace>
+    <AssemblyName>ZipSaberWindow</AssemblyName>
+    <RootNamespace>ZipSaberWindow</RootNamespace>
     <LangVersion>latest</LangVersion>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>

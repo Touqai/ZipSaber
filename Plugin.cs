@@ -80,7 +80,8 @@ namespace ZipSaber
             Log.Info("OnEnable called.");
             CalculatePaths();
             MainThreadDispatcher.Init();   // must be created on the main thread
-            if (Config?.AutoOpenStreamWindow == true && !StreamWindow.IsRunning) StreamWindow.Open();
+            MainMenuAwaiter.MainMenuInitializing -= OnMenuForWindowHost;
+            MainMenuAwaiter.MainMenuInitializing += OnMenuForWindowHost;
 
             // Guard against duplicate subscription across OnEnable calls
             MainMenuAwaiter.MainMenuInitializing -= RegisterBSMLSettings;
@@ -93,6 +94,8 @@ namespace ZipSaber
                 Task.Run(async () => { await Task.Delay(3000); AttemptFindAndHookWindow(); });
             }
         }
+
+        private static void OnMenuForWindowHost() => WindowHost.EnsureHosted();
 
         [OnDisable]
         public void OnDisable()

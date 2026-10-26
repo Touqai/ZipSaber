@@ -31,8 +31,8 @@ namespace ZipSaber
         /// <summary>Custom folder for dropped WIP maps. Empty = Beat Saber_Data/CustomWipLevels.</summary>
         public virtual string CustomWipPath { get; set; } = "";
 
-        /// <summary>Open the ZipSaber Stream window when the game starts.</summary>
-        public virtual bool AutoOpenStreamWindow { get; set; } = false;
+        /// <summary>Keep the game window open through ZipSaber restarts (Discord screenshare keeps going).</summary>
+        public virtual bool KeepWindowOnRestart { get; set; } = true;
 
         public virtual void OnReload() { }
         public virtual void Changed() { }
@@ -44,7 +44,7 @@ namespace ZipSaber
             AccentColor = other.AccentColor;
             BrowseSortMode = other.BrowseSortMode;
             CustomWipPath = other.CustomWipPath;
-            AutoOpenStreamWindow = other.AutoOpenStreamWindow;
+            KeepWindowOnRestart = other.KeepWindowOnRestart;
         }
     }
 }
