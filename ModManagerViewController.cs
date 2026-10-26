@@ -97,6 +97,117 @@ namespace ZipSaber
             BuildRows();
         }
 
+        private void OnCatalogChanged()
+        {
+            if (this == null || !isActiveAndEnabled) return;
+            UpdateCountLabel();
+            if (ListVisible) BuildRows();
+        }
+
+        // ── Updates ───────────────────────────────────────────────────────────────
+        private ModInfo _updateMod;
+        private BeatModsBrowserViewController.BeatModsEntry _updateEntry;
+        private List<(ModInfo Mod, BeatModsBrowserViewController.BeatModsEntry Update)> _updateAll;
+
+        private void ShowUpdateConfirm(ModInfo mod, BeatModsBrowserViewController.BeatModsEntry entry)
+        {
+            if (ConfirmVisible) return;
+            _updateMod = mod; _updateEntry = entry; _updateAll = null;
+            string when = entry.Updated > DateTime.MinValue
+                ? $"  ·  released {entry.Updated.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)}" : "";
+            string desc = string.IsNullOrWhiteSpace(entry.Description) ? "" : entry.Description.Replace("\r", "").Replace("\n", " ").Trim();
+            if (desc.Length > 150) desc = desc.Substring(0, 147).TrimEnd() + "...";
+            Card?.Set("UPDATE MOD", $"{mod.DisplayLabel}  v{mod.Version}  >  v{entry.Version}",
+                $"<color=#8A8A99><size=90%>From BeatMods{PromptUi.Esc(when)}</size></color>\n<color=#C8C8D2>{PromptUi.Esc(desc)}</color>",
+                "<color=#9A9AA6>The new version loads after a restart.</color>", null,
+                InlinePrompt.Btn.Primary("UPDATE & RESTART", () => RunUpdate(true), 1.3f),
+                InlinePrompt.Btn.Neutral("UPDATE NOW", () => RunUpdate(false), 1.1f),
+                InlinePrompt.Btn.Neutral("CANCEL", () => { StopAutoCancel(); HideConfirm(); }, 0.8f));
+            OpenCard();
+        }
+
+        private void ShowUpdateAllConfirm()
+        {
+            if (ConfirmVisible) return;
+            _updateAll = BeatModsCatalog.AllUpdates();
+            if (_updateAll.Count == 0) return;
+            _updateMod = null; _updateEntry = null;
+            var names = _updateAll.Select(u => $"{u.Mod.DisplayLabel} <color=#8A8A99>{u.Mod.Version} > {u.Update.Version}</color>").ToList();
+            string list = names.Count <= 5 ? string.Join("\n", names)
+                : string.Join("\n", names.Take(5)) + $"\n<color=#8A8A99>and {names.Count - 5} more</color>";
+            Card?.Set("UPDATE MODS", $"Update {_updateAll.Count} mod{(_updateAll.Count == 1 ? "" : "s")}?",
+                $"<color=#C8C8D2>{list}</color>",
+                "<color=#9A9AA6>New versions load after a restart.</color>", null,
+                InlinePrompt.Btn.Primary("UPDATE ALL & RESTART", () => RunUpdate(true), 1.4f),
+                InlinePrompt.Btn.Neutral("UPDATE ALL", () => RunUpdate(false), 1.0f),
+                InlinePrompt.Btn.Neutral("CANCEL", () => { StopAutoCancel(); HideConfirm(); }, 0.8f));
+            OpenCard();
+        }
+
+        private void OpenCard()
+        {
+            ConfirmVisible = true; ListVisible = false; UpdateBanner();
+            NotifyPropertyChanged(nameof(ConfirmVisible));
+            NotifyPropertyChanged(nameof(ListVisible));
+            StopAutoCancel();
+            _autoCancelCo = StartCoroutine(AutoCancelCountdown());
+        }
+
+        private void RunUpdate(bool restartAfter)
+        {
+            StopAutoCancel(); HideConfirm();
+            var jobs = _updateAll ?? (_updateMod != null ? new List<(ModInfo, BeatModsBrowserViewController.BeatModsEntry)> { (_updateMod, _updateEntry) } : null);
+            _updateAll = null; _updateMod = null; _updateEntry = null;
+            if (jobs == null || jobs.Count == 0) return;
+
+            int left = jobs.Count, okCount = 0;
+            var failed = new List<string>();
+            SetToggleStatus(jobs.Count == 1 ? $"Updating {jobs[0].Item1.DisplayLabel}..." : $"Updating {jobs.Count} mods...");
+            BuildRows();
+            foreach (var (mod, entry) in jobs)
+            {
+                BeatModsCatalog.Update(mod, entry, (ok, msg) =>
+                {
+                    if (ok) okCount++; else failed.Add(mod.DisplayLabel);
+                    if (--left > 0) return;
+                    if (this == null) return;
+                    string summary = failed.Count == 0
+                        ? (jobs.Count == 1 ? msg : $"Updated {okCount} mods. Restart to load them.")
+                        : $"Updated {okCount}, failed: {string.Join(", ", failed)} (see log).";
+                    SetToggleStatus(summary);
+                    LoadAndRefresh();
+                    if (restartAfter && okCount > 0) { ExecutePendingDeletions(); ModFileOps.Restart(); }
+                });
+            }
+        }
+
+        private void BuildUpdatesBar(Transform parent, int count)
+        {
+            var rowGo = new GameObject("UpdatesBar");
+            rowGo.transform.SetParent(parent, false);
+            rowGo.AddComponent<RectTransform>();
+            var bg = rowGo.AddComponent<Image>();
+            bg.sprite = GetNoGlowSprite(); bg.material = GetNoGlowMaterial(); bg.type = Image.Type.Sliced;
+            var a = Theme.Accent;
+            bg.color = new Color(a.r * 0.25f, a.g * 0.25f, a.b * 0.25f, 0.85f);
+            var layout = rowGo.AddComponent<HorizontalLayoutGroup>();
+            layout.spacing = 2; layout.childAlignment = TextAnchor.MiddleLeft;
+            layout.childForceExpandWidth = false; layout.childForceExpandHeight = false;
+            layout.childControlWidth = true; layout.childControlHeight = true;
+            layout.padding = new RectOffset(2, 2, 1, 1);
+            var le = rowGo.AddComponent<LayoutElement>(); le.preferredHeight = 7.5f; le.minHeight = 7.5f;
+
+            var lblGo = new GameObject("Label");
+            lblGo.transform.SetParent(rowGo.transform, false);
+            var lLE = lblGo.AddComponent<LayoutElement>(); lLE.flexibleWidth = 1; lLE.preferredHeight = 5.5f;
+            var t = lblGo.AddComponent<TextMeshProUGUI>();
+            t.text = $"<b>{count} update{(count == 1 ? "" : "s")} available</b>  <color=#8A8A99><size=80%>from BeatMods</size></color>";
+            t.fontSize = 3.1f; t.alignment = TextAlignmentOptions.Left; t.richText = true; t.raycastTarget = false;
+            t.color = Color.white; t.fontSharedMaterial = GetNoGlowTMPMaterial(t);
+
+            BuildButton(rowGo.transform, "UPDATE ALL", Theme.AccentShade(0.75f, 1f), ShowUpdateAllConfirm, 20);
+        }
+
         // Slot machine + settings cog, top right of the header
         private void BuildHeaderIcons()
         {
@@ -123,6 +234,9 @@ namespace ZipSaber
             if (_reloadBtn != null) UiKit.Recolor(_reloadBtn, Theme.Accent);
             Theme.Changed -= OnThemeChanged;
             Theme.Changed += OnThemeChanged;
+            BeatModsCatalog.Changed -= OnCatalogChanged;
+            BeatModsCatalog.Changed += OnCatalogChanged;
+            BeatModsCatalog.EnsureLoaded();
             if (_zsTag != null) _zsTag.color = Theme.Accent;
             if (!firstActivation) LoadAndRefresh();
             UpdateBanner();
@@ -385,7 +499,9 @@ namespace ZipSaber
                 if (st == ModRuntimeState.Enabled || st == ModRuntimeState.Protected || st == ModRuntimeState.Library) on++;
                 else if (st == ModRuntimeState.Disabled) off++;
             }
-            ModCountLabel = $"{_allMods.Count} mods  <color=#55CC77>{on} on</color>  <color=#888888>{off} off</color>";
+            int upd = BeatModsCatalog.Loaded ? _allMods.Count(m => BeatModsCatalog.FindUpdate(m) != null) : 0;
+            ModCountLabel = $"{_allMods.Count} mods  <color=#55CC77>{on} on</color>  <color=#888888>{off} off</color>"
+                          + (upd > 0 ? $"  <color={Theme.AccentHex}>{upd} update{(upd == 1 ? "" : "s")}</color>" : "");
             NotifyPropertyChanged(nameof(ModCountLabel));
         }
 
@@ -443,6 +559,11 @@ namespace ZipSaber
             }
 
             if (rows.Count == 0) BuildGroupHeader(container, "NO MODS MATCH YOUR SEARCH", -1);
+
+            int updates = BeatModsCatalog.Loaded ? rows.Count(r => BeatModsCatalog.FindUpdate(r.Mod) != null) : 0;
+            if (updates > 0 && string.IsNullOrWhiteSpace(_searchText))
+                BuildUpdatesBar(container, updates);
+            if (updates > 0 && string.IsNullOrWhiteSpace(_searchText)) container.GetChild(container.childCount - 1).SetAsFirstSibling();
 
             UpdateCountLabel();
             Plugin.Log?.Debug($"[ModManager] Built {rows.Count} rows ({mode}).");
@@ -536,7 +657,13 @@ namespace ZipSaber
 
             // Name + version
             string nameColor = isPending ? "#FF9999" : isOff ? "#7A7A80" : "#E6E6EA";
+            var update = isPending ? null : BeatModsCatalog.FindUpdate(mod);
+            bool updating = BeatModsCatalog.Updating.Contains(mod.Id);
+            bool updated = BeatModsCatalog.UpdatedThisSession.Contains(mod.Id);
             string tag = isPending ? "  <color=#CC5555><size=80%>PENDING DELETE</size></color>"
+                       : updating ? $"  <color={Theme.AccentHex}><size=80%>UPDATING...</size></color>"
+                       : updated  ? "  <color=#6688AA><size=80%>UPDATED - RESTART TO LOAD</size></color>"
+                       : update != null ? $"  <color={Theme.AccentHex}><size=80%>v{update.Version} AVAILABLE</size></color>"
                        : state == ModRuntimeState.Ignored   ? "  <color=#CC8833><size=80%>FAILED TO LOAD</size></color>"
                        : state == ModRuntimeState.NotLoaded ? "  <color=#6688AA><size=80%>RESTART TO LOAD</size></color>"
                        : "";
@@ -564,6 +691,9 @@ namespace ZipSaber
                 uTMP.alignment = TextAlignmentOptions.Right; uTMP.enableWordWrapping = false; uTMP.raycastTarget = false;
                 uTMP.fontSharedMaterial = GetNoGlowTMPMaterial(uTMP);
             }
+
+            if (update != null && !updating)
+                BuildButton(rowGo.transform, "UPDATE", Theme.AccentShade(0.75f, 1f), () => ShowUpdateConfirm(mod, update), 13);
 
             // Toggle pill
             string tLabel; Color tColor; Action tAct = null;

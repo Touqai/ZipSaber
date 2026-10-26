@@ -15,7 +15,7 @@ namespace ZipSaber
     [ViewDefinition("ZipSaber.beat-mods-browser.bsml")]
     internal class BeatModsBrowserViewController : BSMLAutomaticViewController
     {
-        private const string BeatModsApi = "https://beatmods.com/api/v1";
+        internal const string BeatModsApi = "https://beatmods.com/api/v1";
 
         private static BeatModsBrowserViewController _instance;
         internal static BeatModsBrowserViewController Instance
@@ -196,6 +196,7 @@ namespace ZipSaber
                 .ToList();
 
             _allMods = deduped;
+            BeatModsCatalog.Set(_allMods);   // Mod Manager update checks use the same list
             StatusLabel = $"{_allMods.Count} mods";
             NotifyPropertyChanged(nameof(StatusLabel));
 
@@ -243,6 +244,7 @@ namespace ZipSaber
                 StringComparer.OrdinalIgnoreCase);
             var pendingInstalls = new HashSet<string>(
                 ModManagerViewController.PendingInstalls, StringComparer.OrdinalIgnoreCase);
+            _installedMods = installedMods;
 
             var rows = _filtered.Select(m => new BRow
             {
@@ -294,6 +296,53 @@ namespace ZipSaber
             Plugin.Log?.Debug($"[BeatMods] Rendered {rows.Count} rows ({mode}).");
             ScrollFix.Refresh(this, _containerGo, _scrollToTop);
             _scrollToTop = false;
+        }
+
+        private List<ModInfo> _installedMods = new List<ModInfo>();
+
+        private ModInfo InstalledFor(BeatModsEntry e)
+            => _installedMods.FirstOrDefault(m => BeatModsCatalog.Find(m) == e)
+               ?? _installedMods.FirstOrDefault(m => string.Equals(m.Name, e.Name, StringComparison.OrdinalIgnoreCase)
+                                                  || string.Equals(m.Id, e.Name, StringComparison.OrdinalIgnoreCase));
+
+        private ModInfo _updMod;
+        private BeatModsEntry _updEntry;
+
+        private void ShowUpdateConfirm(ModInfo mod, BeatModsEntry entry)
+        {
+            _updMod = mod; _updEntry = entry; _pendingInstall = null;
+            string desc = string.IsNullOrWhiteSpace(entry.Description) ? "" : entry.Description.Replace("\r", "").Replace("\n", " ").Trim();
+            if (desc.Length > 150) desc = desc.Substring(0, 147).TrimEnd() + "...";
+            Card?.Set("UPDATE MOD", $"{mod.DisplayLabel}  v{mod.Version}  >  v{entry.Version}",
+                $"<color=#C8C8D2>{PromptUi.Esc(desc)}</color>",
+                "<color=#9A9AA6>The new version loads after a restart.</color>", null,
+                InlinePrompt.Btn.Primary("UPDATE & RESTART", () => RunUpdate(true), 1.3f),
+                InlinePrompt.Btn.Neutral("UPDATE NOW", () => RunUpdate(false), 1.1f),
+                InlinePrompt.Btn.Neutral("CANCEL", () => { _updMod = null; StopAutoCancel(); HideConfirm(); }, 0.8f));
+            ConfirmVisible = true; ListVisible = false;
+            NotifyPropertyChanged(nameof(ConfirmVisible));
+            NotifyPropertyChanged(nameof(ListVisible));
+            StopAutoCancel();
+            _autoCancelCo = StartCoroutine(AutoCancelCountdown());
+        }
+
+        private void RunUpdate(bool restartAfter)
+        {
+            var mod = _updMod; var entry = _updEntry;
+            _updMod = null; _updEntry = null;
+            StopAutoCancel(); HideConfirm();
+            if (mod == null || entry == null) return;
+            StatusLabel = $"Updating {entry.Name}...";
+            NotifyPropertyChanged(nameof(StatusLabel));
+            BeatModsCatalog.Update(mod, entry, (ok, msg) =>
+            {
+                if (this == null) return;
+                StatusLabel = msg;
+                NotifyPropertyChanged(nameof(StatusLabel));
+                ApplyFilter();
+                if (ok && restartAfter) ModFileOps.Restart();
+            });
+            ApplyFilter();
         }
 
         private class BRow
@@ -361,7 +410,14 @@ namespace ZipSaber
             barImg.sprite = GetNoGlowSprite(); barImg.material = GetNoGlowMaterial(); barImg.type = Image.Type.Sliced;
             barImg.color = accent; barImg.raycastTarget = false;
 
-            string tag = installed ? "  <color=#55AA77><size=80%>INSTALLED</size></color>"
+            var installedInfo = installed ? InstalledFor(mod) : null;
+            var update = installedInfo != null ? BeatModsCatalog.FindUpdate(installedInfo) : null;
+            bool updating = installedInfo != null && BeatModsCatalog.Updating.Contains(installedInfo.Id);
+            bool updated = installedInfo != null && BeatModsCatalog.UpdatedThisSession.Contains(installedInfo.Id);
+            string tag = updating ? $"  <color={Theme.AccentHex}><size=80%>UPDATING...</size></color>"
+                       : updated  ? "  <color=#6688AA><size=80%>UPDATED - RESTART TO LOAD</size></color>"
+                       : update != null ? $"  <color={Theme.AccentHex}><size=80%>UPDATE FROM v{Esc(installedInfo.Version)}</size></color>"
+                       : installed ? "  <color=#55AA77><size=80%>INSTALLED</size></color>"
                        : queued    ? "  <color=#6688DD><size=80%>QUEUED</size></color>" : "";
             var labelGo = new GameObject("Label");
             labelGo.transform.SetParent(rowGo.transform, false);
@@ -376,6 +432,8 @@ namespace ZipSaber
 
             if (!installed && !queued)
                 BuildButton(rowGo.transform, "INSTALL", new Color(0.10f, 0.30f, 0.60f, 1f), () => ShowInstallConfirm(mod), 16);
+            else if (update != null && !updating)
+                BuildButton(rowGo.transform, "UPDATE", Theme.AccentShade(0.75f, 1f), () => ShowUpdateConfirm(installedInfo, update), 16);
             else
             {
                 var sp = new GameObject("Spacer");
@@ -613,7 +671,7 @@ namespace ZipSaber
         }
 
         // ── BeatMods JSON → entries ────────────────────────────────────────────────
-        private static List<BeatModsEntry> ParseBeatModsJson(string json)
+        internal static List<BeatModsEntry> ParseBeatModsJson(string json)
         {
             var result = new List<BeatModsEntry>();
             try
@@ -662,7 +720,7 @@ namespace ZipSaber
             return result;
         }
 
-        private static Version SafeVersion(string v)
+        internal static Version SafeVersion(string v)
         {
             if (string.IsNullOrEmpty(v)) return new Version(0, 0);
             string core = v.Split('-', '+')[0];
