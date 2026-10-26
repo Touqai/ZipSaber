@@ -91,7 +91,7 @@ namespace ZipSaber
                 string args = $"--dir \"{Dir}\" --game \"{me.MainModule?.FileName}\" --pid {me.Id} " +
                               $"--x {tl.x} --y {tl.y} --w {rc.right - rc.left} --h {rc.bottom - rc.top} " +
                               $"--title \"{(title.Length > 0 ? title.ToString().Replace("\"", "") : "Beat Saber")}\" " +
-                              $"--fullscreen {(fullscreen ? 1 : 0)}";
+                              $"--fullscreen {(fullscreen ? 1 : 0)} --accent \"{Theme.AccentHex}\"";
                 ModFileOps.StartDetached(ExePath, args, Dir, noWindow: false);   // must not inherit our sockets/files
                 Plugin.Log?.Info("[Window] Window host started - the game window now survives restarts.");
             }

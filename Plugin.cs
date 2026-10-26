@@ -95,7 +95,15 @@ namespace ZipSaber
             }
         }
 
-        private static void OnMenuForWindowHost() => WindowHost.EnsureHosted();
+        private static void OnMenuForWindowHost()
+        {
+            WindowHost.EnsureHosted();
+            Theme.Changed -= SendAccentToHost;
+            Theme.Changed += SendAccentToHost;
+            if (WindowHost.IsRunning) SendAccentToHost();
+        }
+
+        private static void SendAccentToHost() { if (WindowHost.IsRunning) WindowHost.SendCommand("accent=" + Theme.AccentHex); }
 
         [OnDisable]
         public void OnDisable()

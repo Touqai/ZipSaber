@@ -35,6 +35,7 @@ namespace ZipSaberWindow
                 int I(string k) => o.TryGetValue(k, out var v) && int.TryParse(v, out int n) ? n : 0;
 
                 try { Native.SetProcessDPIAware(); } catch { }
+                if (o.TryGetValue("accent", out var acc)) try { SaberAnim.Accent = ColorTranslator.FromHtml(acc); } catch { }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Application.Run(new HostForm(
@@ -240,6 +241,7 @@ namespace ZipSaberWindow
                 else if (l == "fullscreen=0") SetFullscreen(false);
                 else if (l == "fullscreen=toggle") SetFullscreen(!_fullscreen);
                 else if (l == "activate") ActivateChild();
+                else if (l.StartsWith("accent=")) try { SaberAnim.Accent = ColorTranslator.FromHtml(l.Substring(7)); } catch { }
             }
         }
 
@@ -388,121 +390,145 @@ namespace ZipSaberWindow
     }
 
     /// <summary>
-    /// Loading animation: a note with a down arrow gets cut by a saber swinging down, then a note with
-    /// an up arrow gets cut swinging up. Loops. Pure GDI+, no assets.
+    /// Loading animation in the style of ZipSaber's Note Slots: flat colours, dark housing, reel window,
+    /// accent payline. Side-on 2D: a saber pivots from its hilt on the left; a note slides in from the
+    /// right and gets sliced - red note on a down swing, then blue note on an up swing. Loops.
     /// </summary>
     internal static class SaberAnim
     {
-        private static readonly Color NoteRed = Color.FromArgb(214, 36, 46);
-        private static readonly Color NoteRedDark = Color.FromArgb(120, 14, 22);
-        private static readonly Color SaberBlue = Color.FromArgb(52, 160, 255);
-        private const double Period = 1.8;   // seconds for down + up
+        internal static Color Accent = Color.FromArgb(95, 168, 232);
+        private static readonly Color Red = Color.FromArgb(219, 43, 51);     // slot machine note red
+        private static readonly Color Blue = Color.FromArgb(43, 107, 235);   // slot machine note blue
+        private static readonly Color Housing = Color.FromArgb(242, 8, 8, 13);
+        private static readonly Color Window = Color.FromArgb(28, 28, 38);
+        private const double Period = 2.2;   // seconds for down + up
 
         private static float Clamp01(double v) => (float)Math.Max(0, Math.Min(1, v));
-        private static float Ease(float t) => t < 0.5f ? 4 * t * t * t : 1 - (float)Math.Pow(-2 * t + 2, 3) / 2;
+        private static float EaseInOut(float t) => t < 0.5f ? 4 * t * t * t : 1 - (float)Math.Pow(-2 * t + 2, 3) / 2;
+        private static float EaseOut(float t) => 1 - (float)Math.Pow(1 - t, 3);
+        private static Color A(Color c, float a) => Color.FromArgb((int)(c.A * Math.Max(0, Math.Min(1, a))), c.R, c.G, c.B);
 
         internal static void Draw(Graphics g, Rectangle c, double seconds)
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            float s = Math.Min(c.Width, c.Height) * 0.13f;           // note size
-            if (s < 8) return;
+            float s = Math.Min(c.Width / 7.5f, c.Height / 4.2f) * 0.8f;   // note size
+            if (s < 6) return;
             float cx = c.X + c.Width / 2f, cy = c.Y + c.Height / 2f;
+
+            // housing + reel window + payline, like the slot machine
+            var housing = new RectangleF(cx - s * 3.4f, cy - s * 1.85f, s * 6.8f, s * 3.7f);
+            var window = RectangleF.Inflate(housing, -s * 0.22f, -s * 0.22f);
+            using (var p = RoundRect(housing, s * 0.35f)) using (var b = new SolidBrush(Housing)) g.FillPath(b, p);
+            using (var p = RoundRect(housing, s * 0.35f)) using (var pen = new Pen(A(Accent, 0.35f), Math.Max(1f, s * 0.04f))) g.DrawPath(pen, p);
+            using (var p = RoundRect(window, s * 0.22f)) using (var b = new SolidBrush(Window)) g.FillPath(b, p);
+
+            var state = g.Save();
+            using (var clip = RoundRect(window, s * 0.22f)) g.SetClip(clip);
+            using (var pay = new SolidBrush(A(Accent, 0.45f)))
+                g.FillRectangle(pay, window.Left, cy - s * 0.025f, window.Width, s * 0.05f);
 
             double t = (seconds % Period) / Period;
             bool down = t < 0.5;
-            double u = (t % 0.5) / 0.5;                               // 0..1 inside this half
+            double u = (t % 0.5) / 0.5;
+            Color col = down ? Red : Blue;
 
-            float appear = Clamp01(u / 0.18);
-            float swing = Ease(Clamp01((u - 0.18) / 0.38));
-            const double cutAt = 0.37;                                // when the blade crosses the note
-            float split = Clamp01((u - cutAt) / 0.5);
+            // geometry: hilt pivot on the left, note rests where the blade crosses the payline
+            var pivot = new PointF(window.Left + s * 1.0f, cy);
+            float bladeLen = s * 3.9f;
+            var rest = new PointF(pivot.X + s * 2.7f, cy);
 
-            // ── note ─────────────────────────────────────────────────────────
-            if (u < cutAt)
+            float slide = EaseOut(Clamp01(u / 0.3));                        // note flies in from the right
+            float swing = EaseInOut(Clamp01((u - 0.28) / 0.34));            // saber swing
+            float cut = 0.5f;                                               // blade level with the note
+            bool sliced = swing >= cut;
+            float split = Clamp01((u - (0.28 + 0.34 * 0.5)) / 0.45);
+
+            float startAng = down ? -62f : 62f, endAng = down ? 62f : -62f;  // degrees, + is downwards
+            float ang = startAng + (endAng - startAng) * swing;
+
+            // swing trail (sector between hilt and blade tip)
+            if (u > 0.28 && u < 0.85)
             {
-                float k = 0.75f + 0.25f * Ease(appear);
-                DrawNote(g, cx, cy, s * k, down, (int)(255 * appear), 0, 0, null);
+                float trailFade = Clamp01(1 - (u - 0.62) / 0.23);
+                float from = startAng + (endAng - startAng) * Math.Max(0, swing - 0.5f);
+                float sweep = ang - from;
+                if (Math.Abs(sweep) > 0.5f)
+                {
+                    var outer = new RectangleF(pivot.X - bladeLen, pivot.Y - bladeLen, bladeLen * 2, bladeLen * 2);
+                    using (var path = new GraphicsPath())
+                    {
+                        path.AddPie(outer.X, outer.Y, outer.Width, outer.Height, from, sweep);
+                        using (var b = new SolidBrush(A(col, 0.14f * trailFade))) g.FillPath(b, path);
+                    }
+                }
+            }
+
+            // note
+            if (!sliced)
+            {
+                float x = rest.X + (window.Right + s - rest.X) * (1 - slide);
+                DrawNote(g, x, rest.Y, s, col, 1f, 0, 0, 0);
             }
             else
             {
-                float off = s * 0.85f * Ease(split);
-                float rot = 14f * split;
-                int a = (int)(255 * (1 - split));
-                DrawNote(g, cx - off, cy + off * 0.15f, s, down, a, -rot, -1, null);   // left half
-                DrawNote(g, cx + off, cy + off * 0.15f, s, down, a, rot, 1, null);     // right half
+                float e = EaseOut(split), off = s * 0.75f * e, drift = s * 0.5f * e, rot = 22f * e;
+                float alpha = 1 - split;
+                // the swing pushes the halves apart along its direction
+                float dir = down ? 1 : -1;
+                DrawNote(g, rest.X + drift, rest.Y - off, s, col, alpha, -rot * dir, -1, 0);   // top half
+                DrawNote(g, rest.X + drift, rest.Y + off, s, col, alpha, rot * dir, 1, 0);     // bottom half
             }
 
-            // ── saber: vertical swing through the note, with a fading trail ─────
-            float travel = s * 2.6f;
-            float y0 = down ? cy - travel : cy + travel, y1 = down ? cy + travel : cy - travel;
-            if (u >= 0.18 && u <= 0.85)
+            // saber (drawn on top): grey hilt behind the pivot, flat glowing blade in front
             {
-                float head = y0 + (y1 - y0) * swing;
-                float trailStart = y0 + (y1 - y0) * Math.Max(0f, swing - 0.45f);
-                float fade = Clamp01(1 - (u - 0.56) / 0.29);           // trail fades after the swing ends
-                float w = s * 0.13f;
-
-                using (var glow = new LinearGradientBrush(new PointF(cx, trailStart - 1), new PointF(cx, head + (down ? 1 : -1)),
-                           Color.FromArgb(0, SaberBlue), Color.FromArgb((int)(150 * fade), SaberBlue)))
-                {
-                    var r = RectangleF.FromLTRB(cx - w * 1.6f, Math.Min(trailStart, head), cx + w * 1.6f, Math.Max(trailStart, head));
-                    if (r.Height > 1) g.FillRectangle(glow, r);
-                }
-                using (var core = new LinearGradientBrush(new PointF(cx, trailStart - 1), new PointF(cx, head + (down ? 1 : -1)),
-                           Color.FromArgb(0, Color.White), Color.FromArgb((int)(230 * fade), Color.White)))
-                {
-                    var r = RectangleF.FromLTRB(cx - w * 0.25f, Math.Min(trailStart, head), cx + w * 0.25f, Math.Max(trailStart, head));
-                    if (r.Height > 1) g.FillRectangle(core, r);
-                }
-                if (swing < 1f)
-                {
-                    // the blade itself: a short bright bar across the swing, slightly tilted
-                    float bl = s * 1.9f, tilt = down ? -0.18f : 0.18f;
-                    float[] widths = { w * 4.2f, w * 2.6f, w * 1.6f }; int[] alphas = { 40, 80, 170 };
-                    for (int i = 0; i < 3; i++)
-                        using (var p = new Pen(Color.FromArgb(alphas[i], SaberBlue), widths[i]) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-                            g.DrawLine(p, cx - bl / 2, head - bl / 2 * tilt, cx + bl / 2, head + bl / 2 * tilt);
-                    using (var p = new Pen(Color.White, w * 0.7f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-                        g.DrawLine(p, cx - bl / 2, head - bl / 2 * tilt, cx + bl / 2, head + bl / 2 * tilt);
-                }
+                const float appear = 1f;   // always visible: each swing ends where the next one starts
+                var st2 = g.Save();
+                g.TranslateTransform(pivot.X, pivot.Y);
+                g.RotateTransform(ang);
+                float bw = s * 0.16f;
+                using (var glow = new Pen(A(col, 0.35f * appear), bw * 2.4f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    g.DrawLine(glow, 0, 0, bladeLen, 0);
+                using (var blade = new Pen(A(col, appear), bw) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    g.DrawLine(blade, 0, 0, bladeLen, 0);
+                using (var core = new Pen(A(Color.White, 0.85f * appear), bw * 0.35f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    g.DrawLine(core, s * 0.1f, 0, bladeLen - s * 0.05f, 0);
+                using (var hilt = RoundRect(new RectangleF(-s * 0.62f, -bw * 1.1f, s * 0.66f, bw * 2.2f), bw * 0.6f))
+                using (var hb = new SolidBrush(A(Color.FromArgb(78, 80, 94), appear))) g.FillPath(hb, hilt);
+                using (var grip = new SolidBrush(A(Color.FromArgb(48, 50, 60), appear)))
+                    for (int i = 0; i < 3; i++) g.FillRectangle(grip, -s * 0.5f + i * s * 0.16f, -bw * 1.1f, s * 0.05f, bw * 2.2f);
+                using (var guard = new SolidBrush(A(col, appear))) g.FillRectangle(guard, -s * 0.02f, -bw * 1.25f, s * 0.07f, bw * 2.5f);
+                g.Restore(st2);
             }
-        }
-
-        /// <param name="half">0 = whole note, -1 = left half, 1 = right half</param>
-        private static void DrawNote(Graphics g, float x, float y, float size, bool arrowDown, int alpha, float rotDeg, int half, object _)
-        {
-            if (alpha <= 0) return;
-            var state = g.Save();
-            g.TranslateTransform(x, y);
-            g.RotateTransform(rotDeg);
-            if (half != 0) g.SetClip(new RectangleF(half < 0 ? -size : 0, -size, size, size * 2));
-
-            float h = size / 2f, r = size * 0.18f;
-            using (var path = RoundRect(-h, -h, size, size, r))
-            {
-                using (var fill = new LinearGradientBrush(new PointF(0, -h), new PointF(0, h),
-                           Color.FromArgb(alpha, NoteRed), Color.FromArgb(alpha, NoteRedDark)))
-                    g.FillPath(fill, path);
-                using (var edge = new Pen(Color.FromArgb(alpha / 2, 255, 120, 120), size * 0.03f)) g.DrawPath(edge, path);
-            }
-            // chevron arrow near the edge it points to
-            float aw = size * 0.30f, ah = size * 0.14f, ay = arrowDown ? h * 0.42f : -h * 0.42f;
-            var tri = arrowDown
-                ? new[] { new PointF(-aw, ay - ah), new PointF(aw, ay - ah), new PointF(0, ay + ah) }
-                : new[] { new PointF(-aw, ay + ah), new PointF(aw, ay + ah), new PointF(0, ay - ah) };
-            using (var b = new SolidBrush(Color.FromArgb(alpha, Color.White))) g.FillPolygon(b, tri);
 
             g.Restore(state);
         }
 
-        private static GraphicsPath RoundRect(float x, float y, float w, float h, float r)
+        /// <param name="half">0 = whole note, -1 = top half, 1 = bottom half (side-on cut)</param>
+        private static void DrawNote(Graphics g, float x, float y, float size, Color col, float alpha, float rotDeg, int half, int _)
+        {
+            if (alpha <= 0.01f) return;
+            var st = g.Save();
+            g.TranslateTransform(x, y);
+            g.RotateTransform(rotDeg);
+            float h = size / 2f;
+            if (half != 0) g.SetClip(new RectangleF(-size, half < 0 ? -size : 0, size * 2, size), CombineMode.Intersect);
+            using (var p = RoundRect(new RectangleF(-h, -h, size, size), size * 0.2f))
+            using (var b = new SolidBrush(A(col, alpha))) g.FillPath(b, p);
+            // seen from the side: the arrow face points left (towards the player) - white strip on that edge
+            using (var b = new SolidBrush(A(Color.White, 0.9f * alpha)))
+            using (var p = RoundRect(new RectangleF(-h + size * 0.08f, -h + size * 0.2f, size * 0.12f, size * 0.6f), size * 0.05f))
+                g.FillPath(b, p);
+            g.Restore(st);
+        }
+
+        private static GraphicsPath RoundRect(RectangleF r, float rad)
         {
             var p = new GraphicsPath();
-            float d = r * 2;
-            p.AddArc(x, y, d, d, 180, 90);
-            p.AddArc(x + w - d, y, d, d, 270, 90);
-            p.AddArc(x + w - d, y + h - d, d, d, 0, 90);
-            p.AddArc(x, y + h - d, d, d, 90, 90);
+            float d = Math.Min(rad * 2, Math.Min(r.Width, r.Height));
+            p.AddArc(r.X, r.Y, d, d, 180, 90);
+            p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
             p.CloseFigure();
             return p;
         }
