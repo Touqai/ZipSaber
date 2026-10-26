@@ -103,6 +103,7 @@ namespace ZipSaber
             if (_headerIcons == null) return;
             UiKit.ClearChildren(_headerIcons.transform);
             var dark = new Color(0.16f, 0.16f, 0.21f, 0.95f);
+            UiKit.Button(_headerIcons.transform, "RestartBtn", dark, 7, 7, ShowRestartCard, icon: IconFactory.Restart, iconInset: 0.9f);
             UiKit.Button(_headerIcons.transform, "GambleBtn", dark, 7, 7, ModManagerFlowCoordinator.PresentGamble, icon: IconFactory.Slot, iconInset: 0.9f);
             UiKit.Button(_headerIcons.transform, "SettingsBtn", dark, 7, 7, ModManagerFlowCoordinator.PresentSettings, icon: IconFactory.Cog, iconInset: 0.9f);
         }
@@ -164,6 +165,37 @@ namespace ZipSaber
             {
                 SetToggleStatus("Menu reload failed — see log. Changes are still saved for next launch.");
             }
+        }
+
+        // ── Restart ───────────────────────────────────────────────────────────────
+        private void ShowRestartCard()
+        {
+            if (ConfirmVisible) return;
+            int del, ins;
+            lock (_pendingLock) { del = PendingDeletions.Count; ins = PendingInstalls.Count; }
+            string pending = del + ins > 0
+                ? $"\n<color=#F2C94C>Also applies {del + ins} pending change{(del + ins == 1 ? "" : "s")} ({del} delete, {ins} install).</color>"
+                : "";
+            Card?.Set("RESTART", "Restart Beat Saber?",
+                "<color=#C8C8D2><b>Restart game</b> fully reloads every mod (needed after installs, deletes and updates).\n"
+                + "<b>Reload menu</b> is instant and only re-applies mod toggles.</color>" + pending,
+                "<color=#9A9AA6>A full restart ends a Discord window share. Reload menu keeps it, or share VR View / your screen.</color>",
+                null,
+                InlinePrompt.Btn.Primary("RESTART GAME", OnRestartGame, 1.2f),
+                InlinePrompt.Btn.Neutral("RELOAD MENU", () => { StopAutoCancel(); HideConfirm(); OnReloadMenu(); }, 1.1f),
+                InlinePrompt.Btn.Neutral("CANCEL", () => { StopAutoCancel(); HideConfirm(); }, 0.7f));
+            ConfirmVisible = true; ListVisible = false; UpdateBanner();
+            NotifyPropertyChanged(nameof(ConfirmVisible));
+            NotifyPropertyChanged(nameof(ListVisible));
+            StopAutoCancel();
+            _autoCancelCo = StartCoroutine(AutoCancelCountdown());
+        }
+
+        private void OnRestartGame()
+        {
+            StopAutoCancel(); HideConfirm();
+            ExecutePendingDeletions();   // installs run in OnDisable while the game closes
+            ModFileOps.Restart();
         }
 
         private void ShowToggleConfirm(ModInfo mod, List<string> dependents)

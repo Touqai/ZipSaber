@@ -20,6 +20,7 @@ namespace ZipSaber
         internal static Sprite Bomb        => Get("bomb",   128, BombShape);
         internal static Sprite BombGlint   => Get("glint",  128, GlintShape);
         internal static Sprite Slot        => Get("slot",   128, SlotShape);
+        internal static Sprite Restart     => Get("restart", 128, RestartShape);
         internal static Sprite Circle      => Get("circle",  64, (x, y) => Disc(x, y, 0.5f, 0.5f, 0.46f));
         internal static Sprite RoundRect   => Get("rrect",  128, (x, y) => RoundedRect(x, y, 0.5f, 0.5f, 0.46f, 0.46f, 0.14f));
 
@@ -76,6 +77,27 @@ namespace ZipSaber
 
         // ── Primitives ────────────────────────────────────────────────────────────
         private const float AA = 1.5f / 128f;
+
+        // circular arrow: open ring with an arrowhead at the gap
+        private static float RestartShape(float x, float y)
+        {
+            float dx = x - 0.5f, dy = y - 0.5f;
+            float r = Mathf.Sqrt(dx * dx + dy * dy);
+            float aa = 1.5f / 128f;
+            float ring = Mathf.Clamp01((0.35f - r) / aa + 0.5f) * Mathf.Clamp01((r - 0.25f) / aa + 0.5f);
+            float deg = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg; if (deg < 0) deg += 360f;
+            if (deg > 45f && deg < 105f) ring = 0f;
+
+            float a = 45f * Mathf.Deg2Rad;
+            var radial = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+            var tangent = new Vector2(-Mathf.Sin(a), Mathf.Cos(a));   // counter-clockwise, into the gap
+            var c = new Vector2(0.5f, 0.5f) + radial * 0.30f;
+            var tip = c + tangent * 0.19f;
+            var b1 = c + radial * 0.16f;
+            var b2 = c - radial * 0.16f;
+            float head = Mathf.Max(Triangle(x, y, tip, b1, b2), Triangle(x, y, tip, b2, b1));
+            return Mathf.Max(ring, head);
+        }
 
         private static float Disc(float x, float y, float cx, float cy, float r)
         {

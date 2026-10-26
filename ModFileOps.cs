@@ -94,11 +94,82 @@ namespace ZipSaber
         internal static bool LaunchHelper(bool relaunch)
         {
             if (_helperLaunched) return true;
+            var markers = SafeMarkers();
+            if (markers.Length == 0 && !relaunch) return false;
+            if (LaunchPowerShellHelper(relaunch, markers.Length)) { _helperLaunched = true; return true; }
+            if (LaunchBatchHelper(relaunch, markers)) { _helperLaunched = true; return true; }
+            return false;
+        }
+
+        private static string[] SafeMarkers()
+        {
+            try { return Directory.GetFiles(PluginsDir, "*" + MarkerExt); } catch { return new string[0]; }
+        }
+
+        private static string RelaunchArgs() => string.Join(" ", Environment.GetCommandLineArgs().Skip(1)
+                                                   .Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
+
+        /// <summary>
+        /// PowerShell helper: wakes the moment the game exits (no polling), force-closes a quit
+        /// that hangs (restart only), re-scans for .zs_del markers at that point, then relaunches.
+        /// </summary>
+        private static bool LaunchPowerShellHelper(bool relaunch, int markerCount)
+        {
             try
             {
-                var markers = Directory.GetFiles(PluginsDir, "*" + MarkerExt);
-                if (markers.Length == 0 && !relaunch) return false;
+                var me = Process.GetCurrentProcess();
+                int pid = me.Id;
+                string exe = me.MainModule?.FileName;
+                string ps1 = Path.Combine(TrashDir, $"zs_helper_{pid}.ps1");
+                string Q(string v) => "'" + (v ?? "").Replace("'", "''") + "'";
 
+                var sb = new StringBuilder();
+                sb.AppendLine("$ErrorActionPreference = 'SilentlyContinue'");
+                sb.AppendLine($"$p = Get-Process -Id {pid}");
+                sb.AppendLine("if ($p) {");
+                // Normal quit takes 1-4s. Modded Beat Saber sometimes hangs on exit: when restarting,
+                // give it 8s (player data is saved early in quit) and then end it.
+                sb.AppendLine(relaunch
+                    ? "  if (-not $p.WaitForExit(8000)) { Stop-Process -Id $p.Id -Force; [void]$p.WaitForExit(5000) }"
+                    : "  [void]$p.WaitForExit(120000)");
+                sb.AppendLine("}");
+                sb.AppendLine("Start-Sleep -Milliseconds 250");   // let the OS drop file locks / ports
+                sb.AppendLine($"Get-ChildItem -LiteralPath {Q(PluginsDir)} -Filter '*{MarkerExt}' | ForEach-Object {{");
+                sb.AppendLine($"  $t = $_.FullName.Substring(0, $_.FullName.Length - {MarkerExt.Length})");
+                sb.AppendLine("  for ($i = 0; $i -lt 20 -and (Test-Path -LiteralPath $t); $i++) { Remove-Item -LiteralPath $t -Force; if (Test-Path -LiteralPath $t) { Start-Sleep -Milliseconds 250 } }");
+                sb.AppendLine("  if (-not (Test-Path -LiteralPath $t)) { Remove-Item -LiteralPath $_.FullName -Force }");
+                sb.AppendLine("}");
+                if (relaunch && !string.IsNullOrEmpty(exe))
+                {
+                    string args = RelaunchArgs();
+                    sb.AppendLine($"Start-Process -FilePath {Q(exe)} -WorkingDirectory {Q(Path.GetDirectoryName(exe))}"
+                                  + (string.IsNullOrWhiteSpace(args) ? "" : $" -ArgumentList {Q(args)}"));
+                }
+                sb.AppendLine("Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force");
+                File.WriteAllText(ps1, sb.ToString(), new UTF8Encoding(true));
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{ps1}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = TrashDir
+                });
+                Plugin.Log?.Info($"[Restart] Helper started ({markerCount} file(s) to delete, relaunch={relaunch}).");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log?.Warn($"[Restart] PowerShell helper failed ({ex.Message}), using batch fallback.");
+                return false;
+            }
+        }
+
+        private static bool LaunchBatchHelper(bool relaunch, string[] markers)
+        {
+            try
+            {
                 int pid = Process.GetCurrentProcess().Id;
                 string exe = Process.GetCurrentProcess().MainModule?.FileName;
                 string bat = Path.Combine(TrashDir, $"zs_cleanup_{pid}.bat");
@@ -106,28 +177,21 @@ namespace ZipSaber
                 var sb = new StringBuilder();
                 sb.AppendLine("@echo off");
                 sb.AppendLine("setlocal EnableDelayedExpansion");
-                // wait for the game to close (ping as a sleep: timeout.exe fails without console input)
                 sb.AppendLine(":wait");
                 sb.AppendLine($"tasklist /NH /FI \"PID eq {pid}\" 2>nul | findstr /R /C:\" {pid} \" >nul");
-                sb.AppendLine("if not errorlevel 1 (ping -n 2 127.0.0.1 >nul & goto wait)");
-                sb.AppendLine("ping -n 2 127.0.0.1 >nul");
+                sb.AppendLine("if not errorlevel 1 (ping -n 1 -w 300 192.0.2.1 >nul & goto wait)");
                 foreach (var marker in markers)
                 {
                     string target = marker.Substring(0, marker.Length - MarkerExt.Length);
-                    // retry a few times in case antivirus or the OS still holds it
                     sb.AppendLine("set n=0");
                     string lbl = "d" + Math.Abs(target.GetHashCode());
                     sb.AppendLine($":{lbl}");
                     sb.AppendLine($"del /f /q \"{BatEsc(target)}\" >nul 2>&1");
-                    sb.AppendLine($"if exist \"{BatEsc(target)}\" (set /a n+=1 & ping -n 2 127.0.0.1 >nul & if !n! LSS 10 goto {lbl})");
+                    sb.AppendLine($"if exist \"{BatEsc(target)}\" (set /a n+=1 & ping -n 1 -w 300 192.0.2.1 >nul & if !n! LSS 15 goto {lbl})");
                     sb.AppendLine($"if not exist \"{BatEsc(target)}\" del /f /q \"{BatEsc(marker)}\" >nul 2>&1");
                 }
                 if (relaunch && !string.IsNullOrEmpty(exe))
-                {
-                    string args = string.Join(" ", Environment.GetCommandLineArgs().Skip(1)
-                                    .Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
-                    sb.AppendLine($"start \"\" /D \"{BatEsc(Path.GetDirectoryName(exe))}\" \"{BatEsc(exe)}\" {BatEsc(args)}");
-                }
+                    sb.AppendLine($"start \"\" /D \"{BatEsc(Path.GetDirectoryName(exe))}\" \"{BatEsc(exe)}\" {BatEsc(RelaunchArgs())}");
                 sb.AppendLine("(goto) 2>nul & del /f /q \"%~f0\"");
                 File.WriteAllText(bat, sb.ToString());
 
@@ -139,13 +203,12 @@ namespace ZipSaber
                     CreateNoWindow = true,
                     WorkingDirectory = TrashDir
                 });
-                _helperLaunched = true;
-                Plugin.Log?.Info($"[Delete] After-exit helper started ({markers.Length} file(s), relaunch={relaunch}).");
+                Plugin.Log?.Info($"[Restart] Batch helper started ({markers.Length} file(s), relaunch={relaunch}).");
                 return true;
             }
             catch (Exception ex)
             {
-                Plugin.Log?.Warn($"[Delete] Helper failed: {ex.Message}");
+                Plugin.Log?.Warn($"[Restart] Batch helper failed: {ex.Message}");
                 return false;
             }
         }
@@ -153,6 +216,7 @@ namespace ZipSaber
         /// <summary>Quit and come back, after pending deletes are done.</summary>
         internal static void Restart()
         {
+            Plugin.Log?.Info("[Restart] Restarting Beat Saber.");
             if (!LaunchHelper(relaunch: true))
             {
                 // fall back to the old direct relaunch
