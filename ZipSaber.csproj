@@ -13,6 +13,11 @@
     <OutputPath>bin\$(Configuration)\</OutputPath>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <Nullable>disable</Nullable>
+    <!-- Target game version. Build for another version with: dotnet build -p:GameVersion=1.44.1
+         Game references come from Libs-<version> if that folder exists, else Libs. -->
+    <GameVersion Condition=" '$(GameVersion)' == '' ">1.40.8</GameVersion>
+    <GameLibs Condition=" '$(GameLibs)' == '' and Exists('Libs-$(GameVersion)') ">Libs-$(GameVersion)</GameLibs>
+    <GameLibs Condition=" '$(GameLibs)' == '' ">Libs</GameLibs>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -26,65 +31,65 @@
 
     <!-- ── BSIPA ──────────────────────────────────────────────────────────── -->
     <Reference Include="IPA.Loader">
-      <HintPath>Libs\IPA.Loader.dll</HintPath>
+      <HintPath>$(GameLibs)\IPA.Loader.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
     <!-- ── Unity Engine ───────────────────────────────────────────────────── -->
     <Reference Include="UnityEngine">
-      <HintPath>Libs\UnityEngine.dll</HintPath>
+      <HintPath>$(GameLibs)\UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>Libs\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>$(GameLibs)\UnityEngine.CoreModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>Libs\UnityEngine.UI.dll</HintPath>
+      <HintPath>$(GameLibs)\UnityEngine.UI.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UIElementsModule">
-      <HintPath>Libs\UnityEngine.UIElementsModule.dll</HintPath>
+      <HintPath>$(GameLibs)\UnityEngine.UIElementsModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UIModule">
-      <HintPath>Libs\UnityEngine.UIModule.dll</HintPath>
+      <HintPath>$(GameLibs)\UnityEngine.UIModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.TextRenderingModule">
-      <HintPath>Libs\UnityEngine.TextRenderingModule.dll</HintPath>
+      <HintPath>$(GameLibs)\UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.TextMeshPro">
-      <HintPath>Libs\Unity.TextMeshPro.dll</HintPath>
+      <HintPath>$(GameLibs)\Unity.TextMeshPro.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
     <!-- ── Beat Saber game assemblies ────────────────────────────────────── -->
     <Reference Include="HMLib">
-      <HintPath>Libs\HMLib.dll</HintPath>
+      <HintPath>$(GameLibs)\HMLib.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="HMUI">
-      <HintPath>Libs\HMUI.dll</HintPath>
+      <HintPath>$(GameLibs)\HMUI.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="BeatSaber.ViewSystem">
-      <HintPath>Libs\BeatSaber.ViewSystem.dll</HintPath>
+      <HintPath>$(GameLibs)\BeatSaber.ViewSystem.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Main">
-      <HintPath>Libs\Main.dll</HintPath>
+      <HintPath>$(GameLibs)\Main.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
     <!-- ── Mod dependencies ───────────────────────────────────────────────── -->
     <Reference Include="SongCore">
-      <HintPath>Libs\SongCore.dll</HintPath>
+      <HintPath>$(GameLibs)\SongCore.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="BeatSaberMarkupLanguage">
-      <HintPath>Libs\BSML.dll</HintPath>
+      <HintPath>$(GameLibs)\BSML.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
@@ -136,7 +141,7 @@
     <Compile Include="BeatModsBrowserViewController.cs" />
 
     <!-- ── Embedded resources ─────────────────────────────────────────────── -->
-    <EmbeddedResource Include="manifest.json" />
+    <EmbeddedResource Include="$(IntermediateOutputPath)manifest.json" LogicalName="ZipSaber.manifest.json" />
     <EmbeddedResource Include="mod-manager.bsml" />
     <EmbeddedResource Include="beat-mods-browser.bsml" />
     <EmbeddedResource Include="zipsaber-settings.bsml" />
@@ -159,4 +164,14 @@
   <ItemGroup>
     <EmbeddedResource Include="ZipSaberWindow\bin\Release\ZipSaberWindow.exe" LogicalName="ZipSaber.ZipSaberWindow.exe" />
   </ItemGroup>
+  <!-- manifest.json with "gameVersion" set to $(GameVersion) -->
+  <Target Name="StampManifest" BeforeTargets="BeforeBuild">
+    <PropertyGroup>
+      <_Manifest>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/manifest.json'))</_Manifest>
+      <_Manifest>$([System.Text.RegularExpressions.Regex]::Replace('$(_Manifest)', '"gameVersion"\s*:\s*"[^"]*"', '"gameVersion": "$(GameVersion)"'))</_Manifest>
+    </PropertyGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <WriteLinesToFile File="$(IntermediateOutputPath)manifest.json" Lines="$(_Manifest)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <Message Importance="high" Text="ZipSaber: building for Beat Saber $(GameVersion) (references: $(GameLibs))" />
+  </Target>
 </Project>
